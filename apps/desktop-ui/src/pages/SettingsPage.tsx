@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { getSetting, saveSetting, runCleanupNow } from "@/lib/invoke";
-import { Trash2, Save, PlayCircle, Eye, EyeOff, Key } from "lucide-react";
+import {
+  Trash2,
+  Save,
+  PlayCircle,
+  Eye,
+  EyeOff,
+  Key,
+  Radar,
+} from "lucide-react";
 
 const RETENTION_OPTIONS = [
   { label: "Never (keep all)", value: "0" },
@@ -25,18 +33,41 @@ export default function SettingsPage() {
   const [savingKey, setSavingKey] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
 
+  const [virusTotalKey, setVirusTotalKey] = useState("");
+  const [showVirusTotalKey, setShowVirusTotalKey] = useState(false);
+  const [savingVirusTotalKey, setSavingVirusTotalKey] = useState(false);
+  const [virusTotalSaved, setVirusTotalSaved] = useState(false);
+
   useEffect(() => {
     getSetting("process_retention_hours")
-      .then((v) => { if (v) setRetention(v); })
+      .then((value) => {
+        if (value) {
+          setRetention(value);
+        }
+      })
       .catch(console.error);
+
     getSetting("groq_api_key")
-      .then((v) => { if (v) setApiKey(v); })
+      .then((value) => {
+        if (value) {
+          setApiKey(value);
+        }
+      })
+      .catch(console.error);
+
+    getSetting("virustotal_api_key")
+      .then((value) => {
+        if (value) {
+          setVirusTotalKey(value);
+        }
+      })
       .catch(console.error);
   }, []);
 
   const handleSaveRetention = async () => {
     setSavingRetention(true);
     setRetentionSaved(false);
+
     try {
       await saveSetting("process_retention_hours", retention);
       setRetentionSaved(true);
@@ -49,9 +80,13 @@ export default function SettingsPage() {
   };
 
   const handleSaveApiKey = async () => {
-    if (!apiKey.trim()) return;
+    if (!apiKey.trim()) {
+      return;
+    }
+
     setSavingKey(true);
     setKeySaved(false);
+
     try {
       await saveSetting("groq_api_key", apiKey.trim());
       setKeySaved(true);
@@ -63,14 +98,37 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSaveVirusTotalKey = async () => {
+    if (!virusTotalKey.trim()) {
+      return;
+    }
+
+    setSavingVirusTotalKey(true);
+    setVirusTotalSaved(false);
+
+    try {
+      await saveSetting("virustotal_api_key", virusTotalKey.trim());
+      setVirusTotalSaved(true);
+      setTimeout(() => setVirusTotalSaved(false), 2500);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingVirusTotalKey(false);
+    }
+  };
+
   const handleCleanNow = async () => {
-    const hours = parseInt(retention);
-    if (hours === 0) return;
+    const hours = parseInt(retention, 10);
+    if (hours === 0) {
+      return;
+    }
+
     setCleaning(true);
     setCleanResult(null);
+
     try {
-      const n = await runCleanupNow(hours);
-      setCleanResult(n);
+      const removed = await runCleanupNow(hours);
+      setCleanResult(removed);
     } catch (err) {
       console.error(err);
     } finally {
@@ -82,14 +140,13 @@ export default function SettingsPage() {
     <div>
       <h1 style={styles.pageTitle}>Settings</h1>
 
-      {/* AI Configuration */}
       <div className="card" style={{ maxWidth: 560, marginBottom: 16 }}>
         <div style={styles.cardHeader}>
           <Key size={15} color="var(--color-blue)" />
           <h2 style={styles.sectionTitle}>AI Assistant</h2>
         </div>
         <p style={styles.description}>
-          Threat-Guard ships with AI powered by <strong>Groq (Llama 3.3 70B)</strong> — no setup needed.
+          Threat-Guard ships with AI powered by <strong>Groq (Llama 3.3 70B)</strong>.
           If you want to use your own API key, enter it below and it will take priority.
         </p>
 
@@ -102,8 +159,8 @@ export default function SettingsPage() {
                 type={showKey ? "text" : "password"}
                 placeholder="gsk_..."
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSaveApiKey()}
+                onChange={(event) => setApiKey(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && handleSaveApiKey()}
                 style={{ width: "100%", paddingRight: 36 }}
               />
               <button
@@ -121,20 +178,67 @@ export default function SettingsPage() {
               disabled={savingKey || !apiKey.trim()}
             >
               <Save size={14} />
-              {savingKey ? "Saving…" : keySaved ? "Saved!" : "Save"}
+              {savingKey ? "Saving..." : keySaved ? "Saved!" : "Save"}
             </button>
           </div>
           {apiKey && (
             <p style={{ ...styles.hint, color: "var(--color-green)", marginTop: 6 }}>
-              ✓ API key configured — AI assistant is ready to use
+              AI override key configured and ready to use.
             </p>
           )}
         </div>
       </div>
 
-      {/* Data Retention */}
+      <div className="card" style={{ maxWidth: 560, marginBottom: 16 }}>
+        <div style={styles.cardHeader}>
+          <Radar size={15} color="var(--color-blue)" />
+          <h2 style={styles.sectionTitle}>Malicious Link Detector</h2>
+        </div>
+        <p style={styles.description}>
+          Add a <strong>VirusTotal API key</strong> to power live URL, domain, and IP reputation
+          lookups inside the Malicious Link Detector.
+        </p>
+
+        <div style={styles.field}>
+          <label style={styles.label}>VirusTotal API Key (optional)</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ position: "relative", flex: 1 }}>
+              <input
+                className="input"
+                type={showVirusTotalKey ? "text" : "password"}
+                placeholder="Paste your VirusTotal API key"
+                value={virusTotalKey}
+                onChange={(event) => setVirusTotalKey(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && handleSaveVirusTotalKey()}
+                style={{ width: "100%", paddingRight: 36 }}
+              />
+              <button
+                onClick={() => setShowVirusTotalKey(!showVirusTotalKey)}
+                style={styles.eyeBtn}
+                title={showVirusTotalKey ? "Hide key" : "Show key"}
+              >
+                {showVirusTotalKey ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            <button
+              className="btn btn-primary"
+              style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}
+              onClick={handleSaveVirusTotalKey}
+              disabled={savingVirusTotalKey || !virusTotalKey.trim()}
+            >
+              <Save size={14} />
+              {savingVirusTotalKey ? "Saving..." : virusTotalSaved ? "Saved!" : "Save"}
+            </button>
+          </div>
+          <p style={styles.hint}>
+            Used by the Malicious Link Detector page to fetch VirusTotal verdicts and engine counts
+            for URLs, domains, and IP addresses.
+          </p>
+        </div>
+      </div>
+
       <div className="card" style={{ maxWidth: 560 }}>
-        <h2 style={styles.sectionTitle}>Memory & Data Retention</h2>
+        <h2 style={styles.sectionTitle}>Memory and Data Retention</h2>
         <p style={styles.description}>
           Terminated processes accumulate in the database over time. Set a retention
           window to automatically remove old terminated processes and their metrics.
@@ -147,10 +251,12 @@ export default function SettingsPage() {
             className="input"
             style={{ width: 220 }}
             value={retention}
-            onChange={(e) => setRetention(e.target.value)}
+            onChange={(event) => setRetention(event.target.value)}
           >
-            {RETENTION_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+            {RETENTION_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
           </select>
         </div>
@@ -163,7 +269,7 @@ export default function SettingsPage() {
             disabled={savingRetention}
           >
             <Save size={14} />
-            {savingRetention ? "Saving…" : retentionSaved ? "Saved!" : "Save"}
+            {savingRetention ? "Saving..." : retentionSaved ? "Saved!" : "Save"}
           </button>
 
           <button
@@ -174,14 +280,14 @@ export default function SettingsPage() {
             title={retention === "0" ? "Select a retention period first" : "Run cleanup immediately"}
           >
             {cleaning ? <PlayCircle size={14} /> : <Trash2 size={14} />}
-            {cleaning ? "Cleaning…" : "Clean up now"}
+            {cleaning ? "Cleaning..." : "Clean up now"}
           </button>
         </div>
 
         {cleanResult !== null && (
           <p style={styles.cleanResult}>
             {cleanResult === 0
-              ? "Nothing to clean up — no terminated processes older than the selected window."
+              ? "Nothing to clean up. No terminated processes older than the selected window were found."
               : `Removed ${cleanResult} terminated process record${cleanResult !== 1 ? "s" : ""} from the database.`}
           </p>
         )}
@@ -189,7 +295,7 @@ export default function SettingsPage() {
         {retention !== "0" && (
           <p style={styles.hint}>
             Terminated processes last seen more than{" "}
-            <strong>{RETENTION_OPTIONS.find(o => o.value === retention)?.label}</strong>{" "}
+            <strong>{RETENTION_OPTIONS.find((option) => option.value === retention)?.label}</strong>{" "}
             ago will be deleted automatically every hour.
           </p>
         )}

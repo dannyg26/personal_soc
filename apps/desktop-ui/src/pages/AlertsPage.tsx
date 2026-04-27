@@ -1,10 +1,42 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/store";
-import type { Alert, AlertStatus, Severity } from "@/types";
-import { updateAlertStatus } from "@/lib/invoke";
+import type { Alert, AlertStatus, PasswordHealthAlert, Severity } from "@/types";
+import { getPasswordHealthAlert, updateAlertStatus } from "@/lib/invoke";
 import { formatDistanceToNow } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
+
+const PASSWORD_ALERT_ID = "threat-guard-password-health-alert";
+
+type AlertsListItem = Alert & {
+  source_kind?: "monitor" | "password_health";
+};
+
+function buildPasswordAlert(alert: PasswordHealthAlert): AlertsListItem {
+  return {
+    id: PASSWORD_ALERT_ID,
+    process_id: "",
+    timestamp: alert.last_checked_at,
+    severity: alert.severity,
+    title: alert.title,
+    summary: `${alert.summary}\n\nRecommended action: ${alert.recommendation}`,
+    status: "open",
+    risk_score: alert.risk_score,
+    triggered_rules: [
+      {
+        rule_key: "password_health",
+        explanation: alert.summary,
+        evidence: {
+          compromised_count: alert.compromised_count,
+          weak_compromised_count: alert.weak_compromised_count,
+          affected_sites: alert.affected_sites,
+        },
+        weight: alert.risk_score,
+      },
+    ],
+    source_kind: "password_health",
+  };
+}
 
 export default function AlertsPage() {
   const { alerts, setAlerts } = useAppStore();
@@ -12,8 +44,40 @@ export default function AlertsPage() {
   const [statusFilter, setStatusFilter] = useState<AlertStatus | "">("");
   const [severityFilter, setSeverityFilter] = useState<Severity | "">("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [passwordAlert, setPasswordAlert] = useState<PasswordHealthAlert | null>(null);
 
-  const filtered = alerts
+  useEffect(() => {
+    const loadPasswordAlert = async () => {
+      try {
+        const alert = await getPasswordHealthAlert();
+        setPasswordAlert(alert.has_alert ? alert : null);
+      } catch (err) {
+        console.error("Failed to load password health alert:", err);
+        setPasswordAlert(null);
+      }
+    };
+
+    void loadPasswordAlert();
+    const interval = window.setInterval(() => {
+      void loadPasswordAlert();
+    }, 300000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const allAlerts = useMemo<AlertsListItem[]>(() => {
+    const items: AlertsListItem[] = alerts.map((alert) => ({
+      ...alert,
+      source_kind: "monitor",
+    }));
+    if (passwordAlert?.has_alert) {
+      items.push(buildPasswordAlert(passwordAlert));
+    }
+
+    return items;
+  }, [alerts, passwordAlert]);
+
+  const filtered = allAlerts
     .filter((a) => (!statusFilter || a.status === statusFilter) && (!severityFilter || a.severity === severityFilter))
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
@@ -120,13 +184,22 @@ export default function AlertsPage() {
 
                   {/* Actions */}
                   <div style={styles.alertActions}>
-                    <button
-                      className="btn btn-ghost"
-                      onClick={() => navigate(`/processes/${alert.process_id}`)}
-                    >
-                      View Process
-                    </button>
-                    {alert.status === "open" && (
+                    {alert.source_kind === "password_health" ? (
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => navigate("/password-manager")}
+                      >
+                        Review in Password Manager
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn-ghost"
+                        onClick={() => navigate(`/processes/${alert.process_id}`)}
+                      >
+                        View Process
+                      </button>
+                    )}
+                    {alert.source_kind !== "password_health" && alert.status === "open" && (
                       <>
                         <button
                           className="btn btn-ghost"
@@ -142,7 +215,7 @@ export default function AlertsPage() {
                         </button>
                       </>
                     )}
-                    {alert.status !== "resolved" && (
+                    {alert.source_kind !== "password_health" && alert.status !== "resolved" && (
                       <button
                         className="btn btn-primary"
                         onClick={() => handleStatus(alert, "resolved")}
@@ -219,6 +292,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     color: "var(--text-secondary)",
     lineHeight: 1.6,
+    whiteSpace: "pre-line",
   },
   rulesTitle: {
     fontSize: 11,

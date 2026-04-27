@@ -10,7 +10,11 @@ pub struct RulesEngine {
 pub trait Rule {
     fn key(&self) -> &str;
     fn weight(&self) -> u32;
-    fn check(&self, process: &ProcessRecord, parent: Option<&ProcessRecord>) -> Option<RuleMatchResult>;
+    fn check(
+        &self,
+        process: &ProcessRecord,
+        parent: Option<&ProcessRecord>,
+    ) -> Option<RuleMatchResult>;
 }
 
 impl RulesEngine {

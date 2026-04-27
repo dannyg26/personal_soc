@@ -5,11 +5,9 @@ import {
   Cpu,
   Bell,
   Rocket,
-  Bot,
   Settings,
   PauseCircle,
   PlayCircle,
-  ShieldAlert,
   Activity,
   FishOff,
   Link2Off,
@@ -24,6 +22,8 @@ import {
   pauseMonitoring,
   resumeMonitoring,
 } from "@/lib/invoke";
+import { AssistantSignalProvider } from "@/components/AssistantSignalContext";
+import GlobalAssistant from "@/components/GlobalAssistant";
 
 import robotLogo from "@/assets/robot.png";
 
@@ -33,7 +33,6 @@ const NAV_ITEMS = [
   { to: "/alerts", label: "Alerts", icon: Bell },
   { to: "/startup", label: "Startup", icon: Rocket },
   { to: "/events", label: "Events", icon: Activity },
-  { to: "/assistant", label: "AI Assistant", icon: Bot },
   { to: "/phishing-detector", label: "Phishing Detector", icon: FishOff },
   { to: "/malicious-link-detector", label: "Malicious Link Detector", icon: Link2Off },
   { to: "/password-manager", label: "Password Manager", icon: KeyRound },
@@ -67,7 +66,7 @@ export default function Layout() {
     }
   }, [setOverview, setAlerts, setStartupEntries]);
 
-  // Processes: top 200 by risk score for AssistantPage dropdown — refresh every 30s
+  // Processes: top 200 by risk score for app-wide views and helpers — refresh every 30s
   const refreshProcesses = useCallback(async () => {
     try {
       const result = await listProcessesPaged("", "", "risk_score", false, 200, 0);
@@ -113,7 +112,8 @@ export default function Layout() {
       : "var(--color-red)";
 
   return (
-    <div style={styles.shell}>
+    <AssistantSignalProvider>
+      <div style={styles.shell}>
       {/* Sidebar */}
       <aside style={styles.sidebar}>
         <div style={styles.logoArea}>
@@ -182,7 +182,10 @@ export default function Layout() {
       <main style={styles.main}>
         <Outlet />
       </main>
-    </div>
+
+      <GlobalAssistant />
+      </div>
+    </AssistantSignalProvider>
   );
 }
 

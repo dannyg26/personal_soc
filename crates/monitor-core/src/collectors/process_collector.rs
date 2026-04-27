@@ -1,11 +1,9 @@
 use anyhow::Result;
 use chrono::Utc;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::path::Path;
 
-use shared_types::models::{
-    PathCategory, ProcessRecord, SignerStatus,
-};
+use shared_types::models::{PathCategory, ProcessRecord, SignerStatus};
 
 pub struct ProcessCollector;
 
@@ -28,11 +26,11 @@ impl ProcessCollector {
 
     #[cfg(windows)]
     fn enumerate_windows_processes(&self) -> Result<Vec<ProcessRecord>> {
+        use windows::Win32::Foundation::INVALID_HANDLE_VALUE;
         use windows::Win32::System::Diagnostics::ToolHelp::{
             CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
             TH32CS_SNAPPROCESS,
         };
-        use windows::Win32::Foundation::INVALID_HANDLE_VALUE;
 
         let mut processes = Vec::new();
         let now = Utc::now();
@@ -63,7 +61,11 @@ impl ProcessCollector {
 
                     let mut record = ProcessRecord::new(pid);
                     record.name = name;
-                    record.parent_pid = if parent_pid == 0 { None } else { Some(parent_pid) };
+                    record.parent_pid = if parent_pid == 0 {
+                        None
+                    } else {
+                        Some(parent_pid)
+                    };
                     record.first_seen_at = now;
                     record.last_seen_at = now;
 
@@ -86,25 +88,23 @@ impl ProcessCollector {
 
     #[cfg(windows)]
     fn enrich_process_record(&self, record: &mut ProcessRecord) {
+        use windows::core::PWSTR;
         use windows::Win32::System::Threading::{
             OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
             PROCESS_QUERY_LIMITED_INFORMATION,
         };
-        use windows::core::PWSTR;
 
         unsafe {
-            let handle = OpenProcess(
-                PROCESS_QUERY_LIMITED_INFORMATION,
-                false,
-                record.pid,
-            );
+            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, record.pid);
 
             if let Ok(handle) = handle {
                 let mut path_buf = vec![0u16; 32768];
                 let mut size = path_buf.len() as u32;
                 let path_pwstr = PWSTR(path_buf.as_mut_ptr());
 
-                if QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, path_pwstr, &mut size).is_ok() {
+                if QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, path_pwstr, &mut size)
+                    .is_ok()
+                {
                     let path = String::from_utf16_lossy(&path_buf[..size as usize]);
                     record.exe_path = Some(path.clone());
                     record.path_category = classify_path(&path);
@@ -135,33 +135,58 @@ impl ProcessCollector {
         let now = Utc::now();
 
         let stubs = vec![
-            (1234u32, Some(1u32), "chrome.exe", "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"),
-            (5678, Some(1), "powershell.exe", "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"),
-            (9012, Some(1), "svchost.exe", "C:\\Windows\\System32\\svchost.exe"),
-            (3456, Some(1234), "suspicious.exe", "C:\\Users\\user\\AppData\\Local\\Temp\\suspicious.exe"),
+            (
+                1234u32,
+                Some(1u32),
+                "chrome.exe",
+                "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+            ),
+            (
+                5678,
+                Some(1),
+                "powershell.exe",
+                "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            ),
+            (
+                9012,
+                Some(1),
+                "svchost.exe",
+                "C:\\Windows\\System32\\svchost.exe",
+            ),
+            (
+                3456,
+                Some(1234),
+                "suspicious.exe",
+                "C:\\Users\\user\\AppData\\Local\\Temp\\suspicious.exe",
+            ),
         ];
 
-        Ok(stubs.into_iter().map(|(pid, parent_pid, name, path)| {
-            let mut r = ProcessRecord::new(pid);
-            r.parent_pid = parent_pid;
-            r.name = name.to_string();
-            r.exe_path = Some(path.to_string());
-            r.path_category = classify_path(path);
-            r.signer_status = if path.contains("Temp") || path.contains("AppData") {
-                SignerStatus::Unsigned
-            } else {
-                SignerStatus::Signed
-            };
-            r.first_seen_at = now;
-            r.last_seen_at = now;
-            r
-        }).collect())
+        Ok(stubs
+            .into_iter()
+            .map(|(pid, parent_pid, name, path)| {
+                let mut r = ProcessRecord::new(pid);
+                r.parent_pid = parent_pid;
+                r.name = name.to_string();
+                r.exe_path = Some(path.to_string());
+                r.path_category = classify_path(path);
+                r.signer_status = if path.contains("Temp") || path.contains("AppData") {
+                    SignerStatus::Unsigned
+                } else {
+                    SignerStatus::Signed
+                };
+                r.first_seen_at = now;
+                r.last_seen_at = now;
+                r
+            })
+            .collect())
     }
 
     pub fn kill_process(&self, pid: u32) -> Result<()> {
         #[cfg(windows)]
         {
-            use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+            use windows::Win32::System::Threading::{
+                OpenProcess, TerminateProcess, PROCESS_TERMINATE,
+            };
             unsafe {
                 let handle = OpenProcess(PROCESS_TERMINATE, false, pid)
                     .map_err(|e| anyhow::anyhow!("Failed to open process {}: {:?}", pid, e))?;
@@ -212,22 +237,25 @@ pub fn compute_hash(path: &str) -> Option<String> {
 
 #[cfg(windows)]
 pub fn check_signature(path: &str) -> SignerStatus {
-    use windows::Win32::Security::WinTrust::{
-        WinVerifyTrust, WINTRUST_DATA, WINTRUST_FILE_INFO, WTD_UI_NONE,
-        WTD_REVOKE_NONE, WTD_CHOICE_FILE, WTD_STATEACTION_VERIFY,
-        WINTRUST_DATA_0, WTD_SAFER_FLAG, WINTRUST_DATA_UICONTEXT,
-    };
-    use windows::Win32::Foundation::HWND;
-    use windows::core::{PCWSTR, PWSTR};
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
+    use windows::core::{PCWSTR, PWSTR};
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Security::WinTrust::{
+        WinVerifyTrust, WINTRUST_DATA, WINTRUST_DATA_0, WINTRUST_DATA_UICONTEXT,
+        WINTRUST_FILE_INFO, WTD_CHOICE_FILE, WTD_REVOKE_NONE, WTD_SAFER_FLAG,
+        WTD_STATEACTION_VERIFY, WTD_UI_NONE,
+    };
 
     // Simple existence check first
     if !Path::new(path).exists() {
         return SignerStatus::Unknown;
     }
 
-    let wide_path: Vec<u16> = OsStr::new(path).encode_wide().chain(std::iter::once(0)).collect();
+    let wide_path: Vec<u16> = OsStr::new(path)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
 
     unsafe {
         let mut file_info = WINTRUST_FILE_INFO {
@@ -263,7 +291,11 @@ pub fn check_signature(path: &str) -> SignerStatus {
             data4: [0x8C, 0xC2, 0x00, 0xC0, 0x4F, 0xC2, 0x95, 0xEE],
         };
 
-        let result = WinVerifyTrust(HWND(std::ptr::null_mut()), &mut action_id, &mut trust_data as *mut _ as *mut _);
+        let result = WinVerifyTrust(
+            HWND(std::ptr::null_mut()),
+            &mut action_id,
+            &mut trust_data as *mut _ as *mut _,
+        );
 
         if result == 0 {
             SignerStatus::Signed

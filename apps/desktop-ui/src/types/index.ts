@@ -83,3 +83,87 @@ export interface SystemOverview {
   memory_usage: number;
   timestamp: string;
 }
+
+export interface VirusTotalResult {
+  malicious: number;
+  suspicious: number;
+  harmless: number;
+  undetected: number;
+  permalink: string;
+}
+
+export interface UrlScanResult {
+  scan_target: 'url' | 'domain' | 'ip_address';
+  normalized_url: string;
+  domain: string;
+  local_risk_score: number;
+  is_ip_address: boolean;
+  uses_https: boolean;
+  subdomain_depth: number;
+  url_length: number;
+  suspicious_keywords: string[];
+  heuristics: string[];
+  virustotal: VirusTotalResult | null;
+  virustotal_configured: boolean;
+  virustotal_error: string | null;
+  verdict: 'CLEAN' | 'SUSPICIOUS' | 'MALICIOUS';
+  verdict_source: 'virustotal' | 'local';
+}
+
+export interface PasswordCheckResult {
+  entropy: number;
+  crack_time_display: string;
+  strength_label: 'Very Weak' | 'Weak' | 'Moderate' | 'Strong' | 'Very Strong';
+  breach_count: number;
+}
+
+export interface StoredCredential {
+  id: string;
+  origin: string;
+  match_key: string;
+  site_label: string;
+  username: string;
+  created_at: string;
+  updated_at: string;
+  source: string;
+}
+
+export interface StoredCredentialSecret {
+  id: string;
+  username: string;
+  password: string;
+}
+
+export interface PasswordVaultStatus {
+  configured: boolean;
+  unlocked: boolean;
+  unlock_window_seconds: number;
+}
+
+export interface PasswordVaultRiskSummary {
+  has_alerts: boolean;
+  at_risk_count: number;
+  weak_count: number;
+  reused_count: number;
+}
+
+export interface PasswordHealthAlert {
+  has_alert: boolean;
+  severity: Severity;
+  title: string;
+  summary: string;
+  recommendation: string;
+  risk_score: number;
+  compromised_count: number;
+  weak_compromised_count: number;
+  affected_sites: string[];
+  last_checked_at: string;
+}
+
+export interface BrowserExtensionStatus {
+  port: number;
+  running: boolean;
+  pair_code: string;
+  paired: boolean;
+  last_paired_at: string | null;
+}

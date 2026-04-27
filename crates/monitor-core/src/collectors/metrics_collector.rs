@@ -1,9 +1,9 @@
 use anyhow::Result;
 use chrono::Utc;
-use uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Instant;
+use uuid::Uuid;
 
 use shared_types::models::ProcessMetric;
 
@@ -37,11 +37,13 @@ impl MetricsCollector {
 
     #[cfg(windows)]
     fn collect_windows_metrics(&self, pid: u32, process_id: &str) -> Result<ProcessMetric> {
-        use windows::Win32::System::Threading::{
-            OpenProcess, GetProcessTimes, PROCESS_QUERY_LIMITED_INFORMATION,
-        };
-        use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
         use windows::Win32::Foundation::{CloseHandle, FILETIME};
+        use windows::Win32::System::ProcessStatus::{
+            GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+        };
+        use windows::Win32::System::Threading::{
+            GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
 
         fn filetime_to_u64(ft: FILETIME) -> u64 {
             ((ft.dwHighDateTime as u64) << 32) | (ft.dwLowDateTime as u64)
@@ -64,17 +66,20 @@ impl MetricsCollector {
 
                 // CPU — requires two samples to compute delta
                 let mut creation = FILETIME::default();
-                let mut exit    = FILETIME::default();
-                let mut kernel  = FILETIME::default();
-                let mut user    = FILETIME::default();
-                if GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user).is_ok() {
+                let mut exit = FILETIME::default();
+                let mut kernel = FILETIME::default();
+                let mut user = FILETIME::default();
+                if GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user).is_ok()
+                {
                     let process_time = filetime_to_u64(kernel) + filetime_to_u64(user);
                     let mut prev_lock = self.prev_cpu.lock().unwrap();
 
                     if let Some(prev) = prev_lock.get(&pid) {
-                        let process_delta = process_time.saturating_sub(prev.process_time_100ns) as f64;
+                        let process_delta =
+                            process_time.saturating_sub(prev.process_time_100ns) as f64;
                         // wall time in 100-ns units (same unit as FILETIME)
-                        let wall_delta_100ns = prev.wall_instant.elapsed().as_nanos() as f64 / 100.0;
+                        let wall_delta_100ns =
+                            prev.wall_instant.elapsed().as_nanos() as f64 / 100.0;
                         let num_cpus = std::thread::available_parallelism()
                             .map(|n| n.get())
                             .unwrap_or(1) as f64;
@@ -85,10 +90,13 @@ impl MetricsCollector {
                         }
                     }
 
-                    prev_lock.insert(pid, CpuSample {
-                        process_time_100ns: process_time,
-                        wall_instant: now,
-                    });
+                    prev_lock.insert(
+                        pid,
+                        CpuSample {
+                            process_time_100ns: process_time,
+                            wall_instant: now,
+                        },
+                    );
                 }
 
                 let _ = CloseHandle(handle);

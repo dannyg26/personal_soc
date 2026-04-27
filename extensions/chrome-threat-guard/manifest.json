@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Threat Guard Autofill",
+  "description": "Pairs with the Threat Guard desktop app to save and autofill website credentials.",
+  "version": "0.1.0",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1:38913/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Threat Guard Autofill",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

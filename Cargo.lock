@@ -3916,6 +3916,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4668,11 +4679,16 @@ version = "0.1.0"
 dependencies = [
  "ai-explainer",
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "dirs 5.0.1",
+ "hex",
  "monitor-core",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "sha1",
+ "sha2",
  "shared-types",
  "tauri",
  "tauri-build",
@@ -4681,7 +4697,9 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
+ "windows 0.58.0",
 ]
 
 [[package]]

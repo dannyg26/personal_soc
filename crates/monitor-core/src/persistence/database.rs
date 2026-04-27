@@ -1,13 +1,12 @@
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use shared_types::models::{
-    Alert, AlertStatus, ProcessMetric, ProcessRecord, ProcessStatus,
-    Severity, SignerStatus, PathCategory, StartupEntry, StartupLocationType,
-    TrustRule, UserAction, AiConversation,
+    AiConversation, Alert, AlertStatus, PathCategory, ProcessMetric, ProcessRecord, ProcessStatus,
+    Severity, SignerStatus, StartupEntry, StartupLocationType, TrustRule, UserAction,
 };
 
 /// A row in the unified activity/events timeline.
@@ -20,6 +19,18 @@ pub struct ActivityEvent {
     pub description: String,
     pub severity: String,
     pub related_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CredentialRecord {
+    pub id: String,
+    pub origin: String,
+    pub match_key: String,
+    pub site_label: Option<String>,
+    pub encrypted_payload: Vec<u8>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub source: String,
 }
 
 pub struct Database {
@@ -35,7 +46,7 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
-            );"
+            );",
         )?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -49,7 +60,7 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
-            );"
+            );",
         )?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -97,6 +108,107 @@ impl Database {
             params![cutoff_str],
         )?;
         Ok(deleted)
+    }
+
+    // ---- Credential Vault ----
+
+    pub fn insert_credential(&self, record: &CredentialRecord) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO credentials (
+                id, origin, match_key, site_label, encrypted_payload, created_at, updated_at, source
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                record.id,
+                record.origin,
+                record.match_key,
+                record.site_label,
+                record.encrypted_payload,
+                record.created_at,
+                record.updated_at,
+                record.source,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_credential(&self, record: &CredentialRecord) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE credentials
+             SET origin = ?1,
+                 match_key = ?2,
+                 site_label = ?3,
+                 encrypted_payload = ?4,
+                 updated_at = ?5,
+                 source = ?6
+             WHERE id = ?7",
+            params![
+                record.origin,
+                record.match_key,
+                record.site_label,
+                record.encrypted_payload,
+                record.updated_at,
+                record.source,
+                record.id,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_credentials(&self) -> Result<Vec<CredentialRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, origin, match_key, site_label, encrypted_payload, created_at, updated_at, source
+             FROM credentials
+             ORDER BY updated_at DESC",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(CredentialRecord {
+                id: row.get(0)?,
+                origin: row.get(1)?,
+                match_key: row.get(2)?,
+                site_label: row.get(3)?,
+                encrypted_payload: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+                source: row.get(7)?,
+            })
+        })?;
+
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn list_credentials_by_match_key(&self, match_key: &str) -> Result<Vec<CredentialRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, origin, match_key, site_label, encrypted_payload, created_at, updated_at, source
+             FROM credentials
+             WHERE match_key = ?1
+             ORDER BY updated_at DESC",
+        )?;
+
+        let rows = stmt.query_map([match_key], |row| {
+            Ok(CredentialRecord {
+                id: row.get(0)?,
+                origin: row.get(1)?,
+                match_key: row.get(2)?,
+                site_label: row.get(3)?,
+                encrypted_payload: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+                source: row.get(7)?,
+            })
+        })?;
+
+        Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    pub fn delete_credential(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM credentials WHERE id = ?1", params![id])?;
+        Ok(())
     }
 
     // ---- Processes ----
@@ -268,7 +380,10 @@ impl Database {
             );
             let mut stmt = conn.prepare(&data_sql)?;
             records = stmt
-                .query_map(params![status_filter, search_pattern, limit, offset], map_row)?
+                .query_map(
+                    params![status_filter, search_pattern, limit, offset],
+                    map_row,
+                )?
                 .filter_map(|r| r.ok())
                 .collect();
         }
@@ -499,9 +614,12 @@ impl Database {
             "INSERT INTO user_actions (id, timestamp, action_type, target_type, target_id, note)
              VALUES (?1,?2,?3,?4,?5,?6)",
             params![
-                action.id, action.timestamp.to_rfc3339(),
+                action.id,
+                action.timestamp.to_rfc3339(),
                 format!("{:?}", action.action_type),
-                action.target_type, action.target_id, action.note,
+                action.target_type,
+                action.target_id,
+                action.note,
             ],
         )?;
         Ok(())
@@ -515,9 +633,12 @@ impl Database {
             "INSERT INTO trust_rules (id, rule_type, value, scope, created_at, created_by)
              VALUES (?1,?2,?3,?4,?5,?6)",
             params![
-                rule.id, format!("{:?}", rule.rule_type),
-                rule.value, rule.scope,
-                rule.created_at.to_rfc3339(), rule.created_by,
+                rule.id,
+                format!("{:?}", rule.rule_type),
+                rule.value,
+                rule.scope,
+                rule.created_at.to_rfc3339(),
+                rule.created_by,
             ],
         )?;
         Ok(())
@@ -526,9 +647,7 @@ impl Database {
     pub fn is_trusted(&self, exe_path: Option<&str>, file_hash: Option<&str>, name: &str) -> bool {
         let conn = self.conn.lock().unwrap();
 
-        let checks = [
-            ("ProcessName", name),
-        ];
+        let checks = [("ProcessName", name)];
 
         for (rule_type, value) in &checks {
             if let Ok(count) = conn.query_row(
@@ -536,7 +655,9 @@ impl Database {
                 params![rule_type, value],
                 |row| row.get::<_, i64>(0),
             ) {
-                if count > 0 { return true; }
+                if count > 0 {
+                    return true;
+                }
             }
         }
 
@@ -546,7 +667,9 @@ impl Database {
                 [path],
                 |row| row.get::<_, i64>(0),
             ) {
-                if count > 0 { return true; }
+                if count > 0 {
+                    return true;
+                }
             }
         }
 
@@ -556,7 +679,9 @@ impl Database {
                 [hash],
                 |row| row.get::<_, i64>(0),
             ) {
-                if count > 0 { return true; }
+                if count > 0 {
+                    return true;
+                }
             }
         }
 

@@ -3,15 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter desktop-ui dev",
-    "build": "pnpm --filter desktop-ui build",
-    "tauri": "pnpm --filter tauri-shell tauri",
-    "lint": "pnpm --filter desktop-ui lint",
-    "typecheck": "pnpm --filter desktop-ui typecheck"
+    "dev": "npm --prefix apps/desktop-ui run dev",
+    "build": "npm --prefix apps/desktop-ui run build",
+    "tauri": "cargo tauri",
+    "lint": "npm --prefix apps/desktop-ui run lint",
+    "typecheck": "npm --prefix apps/desktop-ui run typecheck"
   },
   "engines": {
     "node": ">=18",
-    "pnpm": ">=8"
+    "npm": ">=9"
   },
   "dependencies": {
     "cargo": "^0.8.0"

@@ -2,10 +2,10 @@ use anyhow::Result;
 use chrono::Utc;
 use uuid::Uuid;
 
+use crate::collectors::process_collector::check_signature;
 #[cfg(not(windows))]
 use shared_types::models::SignerStatus;
 use shared_types::models::{StartupEntry, StartupLocationType};
-use crate::collectors::process_collector::check_signature;
 
 pub struct StartupCollector;
 
@@ -53,11 +53,11 @@ impl StartupCollector {
         location_type: StartupLocationType,
         entries: &mut Vec<StartupEntry>,
     ) {
-        use windows::Win32::System::Registry::{
-            RegOpenKeyExW, RegEnumValueW, RegCloseKey, HKEY_LOCAL_MACHINE,
-            HKEY_CURRENT_USER, KEY_READ, REG_SZ,
-        };
         use windows::core::PCWSTR;
+        use windows::Win32::System::Registry::{
+            RegCloseKey, RegEnumValueW, RegOpenKeyExW, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
+            KEY_READ, REG_SZ,
+        };
 
         let (hive, subkey) = if key_path.starts_with("HKLM") {
             (HKEY_LOCAL_MACHINE, &key_path[5..])
@@ -155,14 +155,17 @@ impl StartupCollector {
         ])
     }
 
-    pub fn disable_startup_entry(&self, name: &str, location_type: &StartupLocationType) -> Result<()> {
+    pub fn disable_startup_entry(
+        &self,
+        name: &str,
+        location_type: &StartupLocationType,
+    ) -> Result<()> {
         #[cfg(windows)]
         {
-            use windows::Win32::System::Registry::{
-                RegOpenKeyExW, RegDeleteValueW,
-                HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER, KEY_WRITE,
-            };
             use windows::core::PCWSTR;
+            use windows::Win32::System::Registry::{
+                RegDeleteValueW, RegOpenKeyExW, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_WRITE,
+            };
 
             let key_path = match location_type {
                 StartupLocationType::RegistryRunKey | StartupLocationType::RegistryRunOnceKey =>
@@ -177,13 +180,24 @@ impl StartupCollector {
                 // Try HKCU first (no admin needed), fall back to HKLM
                 let mut hkey = Default::default();
                 let hkcu_result = RegOpenKeyExW(
-                    HKEY_CURRENT_USER, PCWSTR(wide_key.as_ptr()), 0, KEY_WRITE, &mut hkey,
-                ).ok();
+                    HKEY_CURRENT_USER,
+                    PCWSTR(wide_key.as_ptr()),
+                    0,
+                    KEY_WRITE,
+                    &mut hkey,
+                )
+                .ok();
 
                 if hkcu_result.is_err() {
                     RegOpenKeyExW(
-                        HKEY_LOCAL_MACHINE, PCWSTR(wide_key.as_ptr()), 0, KEY_WRITE, &mut hkey,
-                    ).ok().map_err(|e| anyhow::anyhow!("Failed to open registry key: {:?}", e))?;
+                        HKEY_LOCAL_MACHINE,
+                        PCWSTR(wide_key.as_ptr()),
+                        0,
+                        KEY_WRITE,
+                        &mut hkey,
+                    )
+                    .ok()
+                    .map_err(|e| anyhow::anyhow!("Failed to open registry key: {:?}", e))?;
                 }
 
                 RegDeleteValueW(hkey, PCWSTR(wide_name.as_ptr()))

@@ -1,4 +1,4 @@
-use shared_types::models::{ProcessRecord, SignerStatus, PathCategory, Severity};
+use shared_types::models::{PathCategory, ProcessRecord, Severity, SignerStatus};
 use shared_types::rules::RuleMatchResult;
 
 pub struct ScoringService;

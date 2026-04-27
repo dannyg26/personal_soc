@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use shared_types::models::AiContext;
 use tracing::{debug, error};
 
-use crate::prompts::{build_system_prompt, build_process_context_prompt};
+use crate::prompts::{build_process_context_prompt, build_system_prompt};
 
 #[derive(Debug, Clone)]
 pub struct AiClientConfig {
@@ -70,9 +70,14 @@ impl AiClient {
         }
     }
 
-    pub async fn ask_about_process(&self, ctx: &AiContext, question: &str) -> Result<String> {
+    pub async fn ask_about_process(
+        &self,
+        ctx: &AiContext,
+        conversation_history: Option<&str>,
+        question: &str,
+    ) -> Result<String> {
         let system = build_system_prompt();
-        let user_prompt = build_process_context_prompt(ctx, question);
+        let user_prompt = build_process_context_prompt(ctx, conversation_history, question);
 
         debug!("Sending AI request for process: {}", ctx.process_name);
 
@@ -85,8 +90,10 @@ impl AiClient {
     }
 
     async fn call_groq(&self, system: &str, prompt: &str) -> Result<String> {
-        let api_key = self.config.api_key.as_deref()
-            .ok_or_else(|| anyhow::anyhow!("Groq API key not configured. Add it in Settings."))?;
+        let api_key =
+            self.config.api_key.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("Groq API key not configured. Add it in Settings.")
+            })?;
 
         #[derive(Serialize)]
         struct GroqRequest {
@@ -96,25 +103,41 @@ impl AiClient {
             temperature: f32,
         }
         #[derive(Serialize)]
-        struct GroqMessage { role: String, content: String }
+        struct GroqMessage {
+            role: String,
+            content: String,
+        }
         #[derive(Deserialize)]
-        struct GroqResponse { choices: Vec<GroqChoice> }
+        struct GroqResponse {
+            choices: Vec<GroqChoice>,
+        }
         #[derive(Deserialize)]
-        struct GroqChoice { message: GroqMessageResp }
+        struct GroqChoice {
+            message: GroqMessageResp,
+        }
         #[derive(Deserialize)]
-        struct GroqMessageResp { content: String }
+        struct GroqMessageResp {
+            content: String,
+        }
 
         let request = GroqRequest {
             model: self.config.model.clone(),
             messages: vec![
-                GroqMessage { role: "system".to_string(), content: system.to_string() },
-                GroqMessage { role: "user".to_string(), content: prompt.to_string() },
+                GroqMessage {
+                    role: "system".to_string(),
+                    content: system.to_string(),
+                },
+                GroqMessage {
+                    role: "user".to_string(),
+                    content: prompt.to_string(),
+                },
             ],
             max_tokens: 1024,
             temperature: 0.3,
         };
 
-        let response = self.http
+        let response = self
+            .http
             .post("https://api.groq.com/openai/v1/chat/completions")
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
@@ -130,14 +153,25 @@ impl AiClient {
         }
 
         let parsed: GroqResponse = response.json().await?;
-        Ok(parsed.choices.into_iter().map(|c| c.message.content).collect::<Vec<_>>().join(""))
+        Ok(parsed
+            .choices
+            .into_iter()
+            .map(|c| c.message.content)
+            .collect::<Vec<_>>()
+            .join(""))
     }
 
     async fn call_anthropic(&self, system: &str, prompt: &str) -> Result<String> {
-        let api_key = self.config.api_key.as_deref()
+        let api_key = self
+            .config
+            .api_key
+            .as_deref()
             .ok_or_else(|| anyhow::anyhow!("Anthropic API key not configured"))?;
 
-        let base_url = self.config.base_url.as_deref()
+        let base_url = self
+            .config
+            .base_url
+            .as_deref()
             .unwrap_or("https://api.anthropic.com");
 
         let request = AnthropicRequest {
@@ -150,7 +184,8 @@ impl AiClient {
             }],
         };
 
-        let response = self.http
+        let response = self
+            .http
             .post(format!("{}/v1/messages", base_url))
             .header("x-api-key", api_key)
             .header("anthropic-version", "2023-06-01")
@@ -167,13 +202,21 @@ impl AiClient {
         }
 
         let parsed: AnthropicResponse = response.json().await?;
-        Ok(parsed.content.into_iter().map(|c| c.text).collect::<Vec<_>>().join(""))
+        Ok(parsed
+            .content
+            .into_iter()
+            .map(|c| c.text)
+            .collect::<Vec<_>>()
+            .join(""))
     }
 
     async fn call_openai(&self, system: &str, prompt: &str) -> Result<String> {
         // OpenAI-compatible endpoint (also works with local models like Ollama)
         let api_key = self.config.api_key.as_deref().unwrap_or("none");
-        let base_url = self.config.base_url.as_deref()
+        let base_url = self
+            .config
+            .base_url
+            .as_deref()
             .unwrap_or("https://api.openai.com");
 
         #[derive(Serialize)]
@@ -207,13 +250,20 @@ impl AiClient {
         let request = OAIRequest {
             model: self.config.model.clone(),
             messages: vec![
-                OAIMessage { role: "system".to_string(), content: system.to_string() },
-                OAIMessage { role: "user".to_string(), content: prompt.to_string() },
+                OAIMessage {
+                    role: "system".to_string(),
+                    content: system.to_string(),
+                },
+                OAIMessage {
+                    role: "user".to_string(),
+                    content: prompt.to_string(),
+                },
             ],
             max_tokens: 1024,
         };
 
-        let response = self.http
+        let response = self
+            .http
             .post(format!("{}/v1/chat/completions", base_url))
             .header("Authorization", format!("Bearer {}", api_key))
             .json(&request)
@@ -221,7 +271,9 @@ impl AiClient {
             .await?;
 
         let parsed: OAIResponse = response.json().await?;
-        Ok(parsed.choices.into_iter()
+        Ok(parsed
+            .choices
+            .into_iter()
             .map(|c| c.message.content)
             .collect::<Vec<_>>()
             .join(""))
@@ -229,7 +281,10 @@ impl AiClient {
 
     async fn call_local(&self, system: &str, prompt: &str) -> Result<String> {
         // Local model via Ollama or similar OpenAI-compatible endpoint
-        let base_url = self.config.base_url.as_deref()
+        let base_url = self
+            .config
+            .base_url
+            .as_deref()
             .unwrap_or("http://localhost:11434");
 
         // Use OpenAI-compatible path for local models
@@ -253,7 +308,9 @@ impl AiClient {
 
     pub fn is_configured(&self) -> bool {
         match self.config.provider {
-            AiProvider::Groq | AiProvider::Anthropic | AiProvider::OpenAI => self.config.api_key.is_some(),
+            AiProvider::Groq | AiProvider::Anthropic | AiProvider::OpenAI => {
+                self.config.api_key.is_some()
+            }
             AiProvider::Local => true,
         }
     }

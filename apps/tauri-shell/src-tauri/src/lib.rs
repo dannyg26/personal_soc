@@ -1,6 +1,11 @@
+mod browser_bridge;
 mod commands;
+mod credential_vault;
+mod password;
 mod state;
 mod tray;
+mod url_scanner;
+mod virustotal;
 
 use std::sync::Arc;
 use tauri::Manager;
@@ -27,11 +32,21 @@ pub fn run() {
             let db_path = app_dir.join("psa.db");
             info!("Database path: {:?}", db_path);
 
-            let (monitor, _event_rx) = monitor_core::services::monitor_service::MonitorService::new(db_path)
-                .expect("Failed to initialize monitor service");
+            let (monitor, _event_rx) =
+                monitor_core::services::monitor_service::MonitorService::new(db_path)
+                    .expect("Failed to initialize monitor service");
 
             let monitor = Arc::new(monitor);
-            let state = state::AppState::new(monitor.clone());
+            let browser_bridge =
+                browser_bridge::BrowserBridgeRuntime::new(credential_vault::BROWSER_BRIDGE_PORT);
+            let vault_access = credential_vault::VaultAccessController::new();
+            browser_bridge::spawn(
+                browser_bridge.clone(),
+                monitor.get_db(),
+                vault_access.clone(),
+            );
+
+            let state = state::AppState::new(monitor.clone(), browser_bridge, vault_access);
             app.manage(state);
 
             let monitor_clone = monitor.clone();
@@ -55,6 +70,21 @@ pub fn run() {
             commands::trust_process,
             commands::list_startup_entries,
             commands::remove_startup_entry,
+            commands::check_url,
+            commands::check_password,
+            commands::list_password_credentials,
+            commands::get_password_vault_status,
+            commands::get_password_vault_risk_summary,
+            commands::get_password_health_alert,
+            commands::set_password_vault_passcode,
+            commands::unlock_password_vault,
+            commands::lock_password_vault,
+            commands::get_password_credential_secret,
+            commands::save_password_credential,
+            commands::update_password_credential,
+            commands::delete_password_credential,
+            commands::get_browser_extension_status,
+            commands::reset_browser_extension_pairing,
             commands::ask_ai_about_process,
             commands::list_activity_events,
             commands::list_activity_events_paged,

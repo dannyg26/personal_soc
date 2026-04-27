@@ -5,7 +5,6 @@ import ProcessesPage from "./pages/ProcessesPage";
 import AlertsPage from "./pages/AlertsPage";
 import StartupPage from "./pages/StartupPage";
 import ProcessDetailPage from "./pages/ProcessDetailPage";
-import AssistantPage from "./pages/AssistantPage";
 import EventsPage from "./pages/EventsPage";
 import SettingsPage from "./pages/SettingsPage";
 import PhishingDetectorPage from "./pages/PhishingDetectorPage";
@@ -23,7 +22,7 @@ export default function App() {
         <Route path="alerts" element={<AlertsPage />} />
         <Route path="startup" element={<StartupPage />} />
         <Route path="events" element={<EventsPage />} />
-        <Route path="assistant" element={<AssistantPage />} />
+        <Route path="assistant" element={<Navigate to="/dashboard" replace />} />
         <Route path="phishing-detector" element={<PhishingDetectorPage />} />
         <Route path="malicious-link-detector" element={<MaliciousLinkDetectorPage />} />
         <Route path="password-manager" element={<PasswordManagerPage />} />

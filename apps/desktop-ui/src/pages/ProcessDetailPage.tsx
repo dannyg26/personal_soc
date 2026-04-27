@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAppStore } from "@/store";
 import type { ProcessRecord, ProcessMetric } from "@/types";
+import type { AiChatMessage } from "@/lib/invoke";
 import {
   getProcessDetails,
   getProcessMetrics,
@@ -52,11 +53,17 @@ export default function ProcessDetailPage() {
   const handleAskAi = async () => {
     if (!processId || !aiInput.trim() || aiLoading) return;
     const question = aiInput.trim();
+    const history: AiChatMessage[] = aiMessages
+      .slice(-6)
+      .map((message) => ({
+        role: message.role === "ai" ? "assistant" : "user",
+        content: message.text,
+      }));
     setAiInput("");
     setAiMessages((m) => [...m, { role: "user", text: question }]);
     setAiLoading(true);
     try {
-      const answer = await askAiAboutProcess(processId, question);
+      const answer = await askAiAboutProcess(processId, question, history);
       setAiMessages((m) => [...m, { role: "ai", text: answer }]);
     } catch (err) {
       setAiMessages((m) => [...m, { role: "ai", text: `Error: ${err}` }]);

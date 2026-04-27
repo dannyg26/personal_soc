@@ -1,6 +1,6 @@
+use crate::models::{Alert, ProcessRecord, StartupEntry};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::models::{ProcessRecord, Alert, StartupEntry};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

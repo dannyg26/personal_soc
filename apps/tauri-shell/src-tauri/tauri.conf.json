@@ -5,9 +5,9 @@
   "identifier": "com.threat-guard.app",
   "build": {
     "frontendDist": "../../desktop-ui/dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "pnpm --filter desktop-ui dev",
-    "beforeBuildCommand": "pnpm --filter desktop-ui build"
+    "devUrl": "http://localhost:43125",
+    "beforeDevCommand": "npm --prefix apps/desktop-ui run dev",
+    "beforeBuildCommand": "npm --prefix apps/desktop-ui run build"
   },
   "app": {
     "windows": [

@@ -1,26 +1,33 @@
-use shared_types::models::{AiContext, SignerStatus, PathCategory};
+use shared_types::models::{AiContext, PathCategory, SignerStatus};
 
 pub fn build_system_prompt() -> String {
-    r#"You are a Windows security assistant embedded in a personal security monitoring tool.
-Your role is to explain process behavior clearly and help users make informed decisions.
+    r#"You are Threat-Guard's built-in Windows security assistant.
+Answer like a thoughtful analyst helping a real person, not like a canned report.
 
 Guidelines:
-- Write in plain text only. No markdown, no ## headers, no ** bold, no bullet points with dashes.
-- Use short labeled sections like "What it is:", "Why it may be suspicious:", "Evidence:", "Next step:" on their own lines.
-- Explain findings in plain English, avoiding excessive jargon.
-- Be honest about uncertainty: use "appears to", "may indicate", "based on available evidence".
-- Do NOT claim certainty about whether something is definitively malware.
-- Keep responses concise and actionable — 4 to 6 sentences total.
-- Never suggest killing system-critical processes (svchost, lsass, winlogon) without strong caveats.
+- Respond in plain text.
+- Default to short paragraphs. Use a short list only when it genuinely makes the answer clearer.
+- Start with the direct answer to the user's question instead of forcing a fixed template.
+- Let the structure vary naturally based on the question. Do not force labels like "What it is" or "Next step" unless the user explicitly asks for a breakdown.
+- Ground your answer in the telemetry you were given. Mention concrete facts such as the process name, path, signer status, parent process, risk score, or triggered rules when relevant.
+- Explain uncertainty honestly using phrases like "based on the available telemetry" or "this may indicate".
+- Do not claim definite malware attribution unless the evidence clearly supports it.
+- If the user asks whether something is safe to kill, mention operational risk and be very careful around critical Windows processes.
+- Keep the tone calm, specific, and useful.
 
-You receive structured telemetry, not raw system access. Work with what you have."#.to_string()
+You receive structured telemetry rather than full system access. Work with what is provided."#
+        .to_string()
 }
 
-pub fn build_process_context_prompt(ctx: &AiContext, question: &str) -> String {
+pub fn build_process_context_prompt(
+    ctx: &AiContext,
+    conversation_history: Option<&str>,
+    question: &str,
+) -> String {
     let signer_str = match &ctx.signer_status {
         SignerStatus::Signed => "digitally signed",
         SignerStatus::Unsigned => "unsigned (no valid signature)",
-        SignerStatus::InvalidSignature => "has an invalid/tampered signature",
+        SignerStatus::InvalidSignature => "has an invalid or tampered signature",
         SignerStatus::Unknown => "signature status unknown",
     };
 
@@ -37,14 +44,20 @@ pub fn build_process_context_prompt(ctx: &AiContext, question: &str) -> String {
     let rules_str = if ctx.triggered_rules.is_empty() {
         "No suspicious rules triggered.".to_string()
     } else {
-        ctx.triggered_rules.iter()
+        ctx.triggered_rules
+            .iter()
             .map(|r| format!("- [{}] {}", r.rule_key, r.explanation))
             .collect::<Vec<_>>()
             .join("\n")
     };
 
+    let history_block = conversation_history
+        .filter(|history| !history.trim().is_empty())
+        .map(|history| format!("Recent Conversation:\n{}\n\n", history))
+        .unwrap_or_default();
+
     format!(
-        r#"Process Telemetry:
+        r#"{history_block}Process Telemetry:
 - Name: {}
 - Path: {} (categorized as: {})
 - Signature: {}
@@ -60,9 +73,9 @@ pub fn build_process_context_prompt(ctx: &AiContext, question: &str) -> String {
 Triggered Security Rules:
 {}
 
-User Question: {}
+Current User Question: {}
 
-Please analyze this process and answer the user's question."#,
+Answer the current question using the telemetry above. If this is a follow-up, continue the conversation instead of repeating the same explanation."#,
         ctx.process_name,
         ctx.exe_path.as_deref().unwrap_or("unknown"),
         path_str,
@@ -77,34 +90,44 @@ Please analyze this process and answer the user's question."#,
         if ctx.network_active { "yes" } else { "no" },
         rules_str,
         question,
+        history_block = history_block,
     )
 }
 
-/// System prompt for the general PC assistant (not process-specific).
 pub fn build_general_system_prompt() -> String {
-    r#"You are an AI security and performance assistant built into Threat-Guard, a Windows desktop monitoring tool.
-You have access to real-time telemetry about the user's PC: running processes, security alerts, startup entries, and system resource usage.
+    r#"You are Threat-Guard's AI assistant for Windows security and performance.
+You have access to a telemetry snapshot of the user's PC, including processes, alerts, startup entries, and recent activity.
 
 Guidelines:
-- Write in plain text only. No markdown, no ## headers, no ** bold, no bullet lists with dashes.
-- Use short labeled sections like "Assessment:", "Possible Causes:", "Recommendation:", "What I see:" on their own lines.
-- Speak plainly — the user may not be a security expert. Avoid jargon.
-- Be honest about uncertainty. Use "appears to", "may indicate", "based on available data".
-- Never claim certainty about whether something is definitely malware.
-- Keep responses focused and actionable — 5 to 10 sentences total.
-- If asked about high CPU or memory, reference the actual process data provided.
-- If asked about startup entries, evaluate their signature and path specifically.
-- If the system looks healthy, say so clearly and reassure the user.
-- You can answer general PC questions (performance, security, startup) using the telemetry provided.
+- Respond in plain text.
+- Sound conversational and specific, not robotic or templated.
+- Start with the takeaway in the first sentence or two.
+- Default to short paragraphs. Use a short list only when it clearly helps.
+- Let the structure vary with the question. Do not force the same headings or labels in every response.
+- If this is a follow-up question, continue the thread naturally and avoid restating the entire system snapshot unless it helps answer the question.
+- Ground your answer in the provided telemetry. Mention concrete process names, alert titles, risk scores, signer status, or startup paths when relevant.
+- Speak plainly and avoid unnecessary jargon.
+- Be honest about uncertainty and do not claim definite malware attribution without strong evidence.
+- If the system looks healthy, say so clearly.
+- When action is warranted, suggest one or two practical next steps rather than a generic checklist.
 
-You receive a snapshot of system telemetry. Work with what is provided."#.to_string()
+You receive a bounded telemetry snapshot. Work with what is provided."#
+        .to_string()
 }
 
-/// Builds the user-turn prompt with full system context and the user's question.
-pub fn build_system_context_prompt(context: &str, question: &str) -> String {
+pub fn build_system_context_prompt(
+    context: &str,
+    conversation_history: Option<&str>,
+    question: &str,
+) -> String {
+    let history_block = conversation_history
+        .filter(|history| !history.trim().is_empty())
+        .map(|history| format!("Recent Conversation:\n{}\n\n", history))
+        .unwrap_or_default();
+
     format!(
-        "Current System Snapshot:\n{}\n\nUser Question: {}\n\nAnalyze the data above and answer the question.",
-        context, question
+        "Current System Snapshot:\n{}\n\n{}Current User Question: {}\n\nAnswer naturally using the snapshot above. Continue the conversation if this is a follow-up, and avoid repeating the full context unless it helps answer the question.",
+        context, history_block, question
     )
 }
 

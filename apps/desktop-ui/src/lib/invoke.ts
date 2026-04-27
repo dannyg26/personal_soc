@@ -1,5 +1,25 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ProcessRecord, ProcessMetric, Alert, StartupEntry, SystemOverview, ActivityEvent } from '@/types';
+import type {
+  ProcessRecord,
+  ProcessMetric,
+  Alert,
+  StartupEntry,
+  SystemOverview,
+  ActivityEvent,
+  UrlScanResult,
+  PasswordCheckResult,
+  StoredCredential,
+  StoredCredentialSecret,
+  PasswordVaultStatus,
+  PasswordVaultRiskSummary,
+  PasswordHealthAlert,
+  BrowserExtensionStatus,
+} from '@/types';
+
+export interface AiChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 export async function getSystemOverview(): Promise<SystemOverview> {
   return invoke('get_system_overview');
@@ -55,8 +75,9 @@ export async function removeStartupEntry(entryId: string, name: string, location
 export async function askAiAboutProcess(
   processId: string,
   question: string,
+  history?: AiChatMessage[],
 ): Promise<string> {
-  return invoke('ask_ai_about_process', { processId, question });
+  return invoke('ask_ai_about_process', { processId, question, history });
 }
 
 export async function pauseMonitoring(): Promise<void> {
@@ -90,6 +111,85 @@ export async function listActivityEventsPaged(
   return invoke('list_activity_events_paged', { limit, offset });
 }
 
-export async function askAi(question: string): Promise<string> {
-  return invoke('ask_ai', { question });
+export async function askAi(question: string, history?: AiChatMessage[]): Promise<string> {
+  return invoke('ask_ai', { question, history });
+}
+
+export async function checkUrl(url: string): Promise<UrlScanResult> {
+  return invoke('check_url', { url });
+}
+
+export async function checkPassword(passwordInput: string): Promise<PasswordCheckResult> {
+  return invoke('check_password', { passwordInput });
+}
+
+export async function listPasswordCredentials(): Promise<StoredCredential[]> {
+  return invoke('list_password_credentials');
+}
+
+export async function getPasswordVaultStatus(): Promise<PasswordVaultStatus> {
+  return invoke('get_password_vault_status');
+}
+
+export async function getPasswordVaultRiskSummary(): Promise<PasswordVaultRiskSummary> {
+  return invoke('get_password_vault_risk_summary');
+}
+
+export async function getPasswordHealthAlert(): Promise<PasswordHealthAlert> {
+  return invoke('get_password_health_alert');
+}
+
+export async function setPasswordVaultPasscode(
+  passcode: string,
+  currentPasscode?: string,
+): Promise<PasswordVaultStatus> {
+  return invoke('set_password_vault_passcode', { passcode, currentPasscode });
+}
+
+export async function unlockPasswordVault(passcode: string): Promise<PasswordVaultStatus> {
+  return invoke('unlock_password_vault', { passcode });
+}
+
+export async function lockPasswordVault(): Promise<PasswordVaultStatus> {
+  return invoke('lock_password_vault');
+}
+
+export async function getPasswordCredentialSecret(
+  credentialId: string,
+): Promise<StoredCredentialSecret> {
+  return invoke('get_password_credential_secret', { credentialId });
+}
+
+export async function savePasswordCredential(
+  siteInput: string,
+  username: string,
+  password: string,
+): Promise<StoredCredential> {
+  return invoke('save_password_credential', { siteInput, username, password });
+}
+
+export async function updatePasswordCredential(
+  credentialId: string,
+  siteInput: string,
+  username: string,
+  password?: string | null,
+): Promise<StoredCredential> {
+  return invoke('update_password_credential', {
+    credentialId,
+    siteInput,
+    username,
+    password,
+  });
+}
+
+export async function deletePasswordCredential(credentialId: string): Promise<void> {
+  return invoke('delete_password_credential', { credentialId });
+}
+
+export async function getBrowserExtensionStatus(): Promise<BrowserExtensionStatus> {
+  return invoke('get_browser_extension_status');
+}
+
+export async function resetBrowserExtensionPairing(): Promise<BrowserExtensionStatus> {
+  return invoke('reset_browser_extension_pairing');
 }

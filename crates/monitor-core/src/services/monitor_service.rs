@@ -1,17 +1,14 @@
+use chrono::Utc;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use sysinfo::System;
 use tokio::sync::{broadcast, RwLock};
 use tokio::time::{interval, Duration};
 use tracing::{debug, error, info};
-use chrono::Utc;
-use sysinfo::System;
 
-use shared_types::models::{
-    Alert, AlertStatus, ProcessRecord, ProcessStatus,
-    SystemOverview,
-};
 use shared_types::events::MonitorEvent;
+use shared_types::models::{Alert, AlertStatus, ProcessRecord, ProcessStatus, SystemOverview};
 
 use crate::collectors::{MetricsCollector, ProcessCollector, StartupCollector};
 use crate::persistence::Database;
@@ -37,19 +34,22 @@ impl MonitorService {
         let db = Database::open(&db_path)?;
         let (event_tx, event_rx) = broadcast::channel(256);
 
-        Ok((Self {
-            db: Arc::new(db),
-            process_collector: ProcessCollector::new(),
-            metrics_collector: MetricsCollector::new(),
-            startup_collector: StartupCollector::new(),
-            rules_engine: RulesEngine::new(),
-            scoring: ScoringService::new(),
-            event_tx,
-            is_paused: Arc::new(RwLock::new(false)),
-            known_pids: Arc::new(RwLock::new(HashMap::new())),
-            cached_cpu: Arc::new(RwLock::new(0.0)),
-            cached_memory: Arc::new(RwLock::new(0.0)),
-        }, event_rx))
+        Ok((
+            Self {
+                db: Arc::new(db),
+                process_collector: ProcessCollector::new(),
+                metrics_collector: MetricsCollector::new(),
+                startup_collector: StartupCollector::new(),
+                rules_engine: RulesEngine::new(),
+                scoring: ScoringService::new(),
+                event_tx,
+                is_paused: Arc::new(RwLock::new(false)),
+                known_pids: Arc::new(RwLock::new(HashMap::new())),
+                cached_cpu: Arc::new(RwLock::new(0.0)),
+                cached_memory: Arc::new(RwLock::new(0.0)),
+            },
+            event_rx,
+        ))
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<MonitorEvent> {
@@ -97,7 +97,8 @@ impl MonitorService {
             }
         };
 
-        let current_pids: HashMap<u32, &ProcessRecord> = current.iter().map(|p| (p.pid, p)).collect();
+        let current_pids: HashMap<u32, &ProcessRecord> =
+            current.iter().map(|p| (p.pid, p)).collect();
         let mut known = self.known_pids.write().await;
 
         // Detect new processes
@@ -117,7 +118,8 @@ impl MonitorService {
                     proc.risk_score = 0;
                 } else {
                     // Build parent map for rule evaluation
-                    let parent = proc.parent_pid
+                    let parent = proc
+                        .parent_pid
                         .and_then(|ppid| current_pids.get(&ppid).copied().cloned().map(|p| p));
 
                     let triggered = self.rules_engine.evaluate(&proc, parent.as_ref());
@@ -131,15 +133,22 @@ impl MonitorService {
                         let mut alert = Alert::new(
                             proc.id.clone(),
                             format!("Suspicious process: {}", proc.name),
-                            triggered.iter().map(|r| r.explanation.clone()).collect::<Vec<_>>().join("; "),
+                            triggered
+                                .iter()
+                                .map(|r| r.explanation.clone())
+                                .collect::<Vec<_>>()
+                                .join("; "),
                             score,
                         );
-                        alert.triggered_rules = triggered.iter().map(|r| shared_types::models::TriggeredRule {
-                            rule_key: r.rule_key.clone(),
-                            explanation: r.explanation.clone(),
-                            evidence: r.evidence.clone(),
-                            weight: r.weight,
-                        }).collect();
+                        alert.triggered_rules = triggered
+                            .iter()
+                            .map(|r| shared_types::models::TriggeredRule {
+                                rule_key: r.rule_key.clone(),
+                                explanation: r.explanation.clone(),
+                                evidence: r.evidence.clone(),
+                                weight: r.weight,
+                            })
+                            .collect();
 
                         if let Err(e) = self.db.insert_alert(&alert) {
                             error!("Failed to insert alert: {}", e);
@@ -173,7 +182,8 @@ impl MonitorService {
         }
 
         // Detect terminated processes
-        let terminated_pids: Vec<u32> = known.keys()
+        let terminated_pids: Vec<u32> = known
+            .keys()
             .filter(|pid| !current_pids.contains_key(pid))
             .copied()
             .collect();
@@ -205,15 +215,26 @@ impl MonitorService {
             let cpu = sys.global_cpu_info().cpu_usage() as f64;
             let total = sys.total_memory();
             let used = sys.used_memory();
-            let mem = if total > 0 { (used as f64 / total as f64) * 100.0 } else { 0.0 };
+            let mem = if total > 0 {
+                (used as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
             // Store results — fire and forget, ignore lock errors
-            if let Ok(mut c) = cpu_cache.try_write() { *c = cpu; }
-            if let Ok(mut m) = mem_cache.try_write() { *m = mem; }
+            if let Ok(mut c) = cpu_cache.try_write() {
+                *c = cpu;
+            }
+            if let Ok(mut m) = mem_cache.try_write() {
+                *m = mem;
+            }
         });
 
         let known = self.known_pids.read().await;
         for (pid, process_id) in known.iter() {
-            match self.metrics_collector.collect_process_metrics(*pid, process_id) {
+            match self
+                .metrics_collector
+                .collect_process_metrics(*pid, process_id)
+            {
                 Ok(metric) => {
                     let _ = self.db.insert_metric(&metric);
                     let _ = self.event_tx.send(MonitorEvent::MetricsUpdated {
@@ -231,12 +252,16 @@ impl MonitorService {
     }
 
     async fn tick_cleanup(&self) {
-        let hours = self.db.get_setting("process_retention_hours")
+        let hours = self
+            .db
+            .get_setting("process_retention_hours")
             .ok()
             .flatten()
             .and_then(|v| v.parse::<u32>().ok())
             .unwrap_or(0); // 0 = disabled
-        if hours == 0 { return; }
+        if hours == 0 {
+            return;
+        }
         match self.db.cleanup_old_processes(hours) {
             Ok(n) if n > 0 => info!("Cleanup: removed {} old terminated process records", n),
             Ok(_) => {}
@@ -265,13 +290,17 @@ impl MonitorService {
 
     pub async fn pause(&self) {
         *self.is_paused.write().await = true;
-        let _ = self.event_tx.send(MonitorEvent::MonitoringPaused { timestamp: Utc::now() });
+        let _ = self.event_tx.send(MonitorEvent::MonitoringPaused {
+            timestamp: Utc::now(),
+        });
         info!("Monitoring paused");
     }
 
     pub async fn resume(&self) {
         *self.is_paused.write().await = false;
-        let _ = self.event_tx.send(MonitorEvent::MonitoringResumed { timestamp: Utc::now() });
+        let _ = self.event_tx.send(MonitorEvent::MonitoringResumed {
+            timestamp: Utc::now(),
+        });
         info!("Monitoring resumed");
     }
 
@@ -289,9 +318,15 @@ impl MonitorService {
         self.process_collector.enrich_single_process(record);
     }
 
-    pub async fn remove_startup_entry(&self, entry_id: &str, name: &str, location_type: &shared_types::models::StartupLocationType) -> anyhow::Result<()> {
+    pub async fn remove_startup_entry(
+        &self,
+        entry_id: &str,
+        name: &str,
+        location_type: &shared_types::models::StartupLocationType,
+    ) -> anyhow::Result<()> {
         // Remove from registry/filesystem
-        self.startup_collector.disable_startup_entry(name, location_type)?;
+        self.startup_collector
+            .disable_startup_entry(name, location_type)?;
         // Remove from DB
         self.db.delete_startup_entry(entry_id)?;
         Ok(())
@@ -299,7 +334,10 @@ impl MonitorService {
 
     pub async fn get_system_overview(&self) -> SystemOverview {
         let db = &self.db;
-        let active_alerts = db.list_alerts(1000).map(|a| a.iter().filter(|x| x.status == AlertStatus::Open).count() as u32).unwrap_or(0);
+        let active_alerts = db
+            .list_alerts(1000)
+            .map(|a| a.iter().filter(|x| x.status == AlertStatus::Open).count() as u32)
+            .unwrap_or(0);
         let processes = db.list_processes().unwrap_or_default();
         let suspicious_count = processes.iter().filter(|p| p.risk_score >= 25).count() as u32;
 

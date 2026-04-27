@@ -29,7 +29,7 @@ personal-soc/
 |------|---------|---------|
 | Rust (stable) | 1.77+ | https://rustup.rs |
 | Node.js | 18+ | https://nodejs.org |
-| pnpm | 8+ | `npm i -g pnpm` |
+| npm | 9+ | Bundled with Node.js |
 | Tauri CLI v2 | latest | `cargo install tauri-cli --version "^2"` |
 | Windows | 10 / 11 | Required (primary target) |
 
@@ -65,7 +65,7 @@ GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxx
 
 ```bash
 # From the repo root
-pnpm install
+npm --prefix apps/desktop-ui install
 ```
 
 ### 4. Run in development mode
@@ -76,6 +76,8 @@ cargo tauri dev
 ```
 
 This starts the Vite dev server and the Tauri desktop window together. The app will hot-reload on frontend changes. Rust changes require a restart.
+
+If another app is already using common frontend dev ports, this project now expects `http://localhost:43125` during development.
 
 ---
 
@@ -155,5 +157,3 @@ Risk score ≥ 40 → flagged as "At Risk". Risk score ≥ 70 → high severity 
 - Events timeline covers the last 30 days only
 
 ---
-
-

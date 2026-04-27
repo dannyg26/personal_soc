@@ -1,9 +1,14 @@
-use serde_json::json;
-use shared_types::models::{ProcessRecord, PathCategory, SignerStatus};
-use shared_types::rules::RuleMatchResult;
 use super::engine::Rule;
+use serde_json::json;
+use shared_types::models::{PathCategory, ProcessRecord, SignerStatus};
+use shared_types::rules::RuleMatchResult;
 
-fn make_result(rule_key: &str, explanation: String, evidence: serde_json::Value, weight: u32) -> RuleMatchResult {
+fn make_result(
+    rule_key: &str,
+    explanation: String,
+    evidence: serde_json::Value,
+    weight: u32,
+) -> RuleMatchResult {
     RuleMatchResult {
         rule_key: rule_key.to_string(),
         matched: true,
@@ -17,14 +22,28 @@ fn make_result(rule_key: &str, explanation: String, evidence: serde_json::Value,
 pub struct UnsignedInUserWritableDir;
 
 impl Rule for UnsignedInUserWritableDir {
-    fn key(&self) -> &str { "unsigned_in_user_writable_dir" }
-    fn weight(&self) -> u32 { 40 }
+    fn key(&self) -> &str {
+        "unsigned_in_user_writable_dir"
+    }
+    fn weight(&self) -> u32 {
+        40
+    }
 
-    fn check(&self, process: &ProcessRecord, _parent: Option<&ProcessRecord>) -> Option<RuleMatchResult> {
-        let is_unsigned = matches!(process.signer_status, SignerStatus::Unsigned | SignerStatus::InvalidSignature);
+    fn check(
+        &self,
+        process: &ProcessRecord,
+        _parent: Option<&ProcessRecord>,
+    ) -> Option<RuleMatchResult> {
+        let is_unsigned = matches!(
+            process.signer_status,
+            SignerStatus::Unsigned | SignerStatus::InvalidSignature
+        );
         let in_writable = matches!(
             process.path_category,
-            PathCategory::UserWritable | PathCategory::Temp | PathCategory::Downloads | PathCategory::AppData
+            PathCategory::UserWritable
+                | PathCategory::Temp
+                | PathCategory::Downloads
+                | PathCategory::AppData
         );
 
         if is_unsigned && in_writable {
@@ -51,16 +70,30 @@ impl Rule for UnsignedInUserWritableDir {
 pub struct PowerShellSpawnedByOffice;
 
 impl Rule for PowerShellSpawnedByOffice {
-    fn key(&self) -> &str { "powershell_spawned_by_office" }
-    fn weight(&self) -> u32 { 60 }
+    fn key(&self) -> &str {
+        "powershell_spawned_by_office"
+    }
+    fn weight(&self) -> u32 {
+        60
+    }
 
-    fn check(&self, process: &ProcessRecord, parent: Option<&ProcessRecord>) -> Option<RuleMatchResult> {
+    fn check(
+        &self,
+        process: &ProcessRecord,
+        parent: Option<&ProcessRecord>,
+    ) -> Option<RuleMatchResult> {
         let is_powershell = process.name.to_lowercase().contains("powershell");
-        let parent_is_office = parent.map(|p| {
-            let n = p.name.to_lowercase();
-            n.contains("winword") || n.contains("excel") || n.contains("outlook") ||
-            n.contains("powerpnt") || n.contains("onenote") || n.contains("mspub")
-        }).unwrap_or(false);
+        let parent_is_office = parent
+            .map(|p| {
+                let n = p.name.to_lowercase();
+                n.contains("winword")
+                    || n.contains("excel")
+                    || n.contains("outlook")
+                    || n.contains("powerpnt")
+                    || n.contains("onenote")
+                    || n.contains("mspub")
+            })
+            .unwrap_or(false);
 
         if is_powershell && parent_is_office {
             Some(make_result(
@@ -86,16 +119,29 @@ impl Rule for PowerShellSpawnedByOffice {
 pub struct CmdSpawnedByScriptHost;
 
 impl Rule for CmdSpawnedByScriptHost {
-    fn key(&self) -> &str { "cmd_spawned_by_script_host" }
-    fn weight(&self) -> u32 { 55 }
+    fn key(&self) -> &str {
+        "cmd_spawned_by_script_host"
+    }
+    fn weight(&self) -> u32 {
+        55
+    }
 
-    fn check(&self, process: &ProcessRecord, parent: Option<&ProcessRecord>) -> Option<RuleMatchResult> {
+    fn check(
+        &self,
+        process: &ProcessRecord,
+        parent: Option<&ProcessRecord>,
+    ) -> Option<RuleMatchResult> {
         let is_cmd = process.name.to_lowercase() == "cmd.exe";
-        let parent_is_script_host = parent.map(|p| {
-            let n = p.name.to_lowercase();
-            n.contains("wscript") || n.contains("cscript") || n.contains("mshta") ||
-            n.contains("wmic") || n.contains("regsvr32")
-        }).unwrap_or(false);
+        let parent_is_script_host = parent
+            .map(|p| {
+                let n = p.name.to_lowercase();
+                n.contains("wscript")
+                    || n.contains("cscript")
+                    || n.contains("mshta")
+                    || n.contains("wmic")
+                    || n.contains("regsvr32")
+            })
+            .unwrap_or(false);
 
         if is_cmd && parent_is_script_host {
             Some(make_result(
@@ -121,14 +167,31 @@ impl Rule for CmdSpawnedByScriptHost {
 pub struct ProcessNameMasquerade;
 
 impl Rule for ProcessNameMasquerade {
-    fn key(&self) -> &str { "process_name_masquerade" }
-    fn weight(&self) -> u32 { 70 }
+    fn key(&self) -> &str {
+        "process_name_masquerade"
+    }
+    fn weight(&self) -> u32 {
+        70
+    }
 
-    fn check(&self, process: &ProcessRecord, _parent: Option<&ProcessRecord>) -> Option<RuleMatchResult> {
+    fn check(
+        &self,
+        process: &ProcessRecord,
+        _parent: Option<&ProcessRecord>,
+    ) -> Option<RuleMatchResult> {
         let system_names = [
-            "svchost.exe", "lsass.exe", "csrss.exe", "winlogon.exe",
-            "services.exe", "spoolsv.exe", "explorer.exe", "taskmgr.exe",
-            "rundll32.exe", "regsvr32.exe", "msiexec.exe", "conhost.exe",
+            "svchost.exe",
+            "lsass.exe",
+            "csrss.exe",
+            "winlogon.exe",
+            "services.exe",
+            "spoolsv.exe",
+            "explorer.exe",
+            "taskmgr.exe",
+            "rundll32.exe",
+            "regsvr32.exe",
+            "msiexec.exe",
+            "conhost.exe",
         ];
 
         let name_lower = process.name.to_lowercase();
@@ -138,7 +201,10 @@ impl Rule for ProcessNameMasquerade {
         // system process) — do not flag those as masquerading.
         let known_user_path = matches!(
             process.path_category,
-            PathCategory::UserWritable | PathCategory::Temp | PathCategory::Downloads | PathCategory::AppData
+            PathCategory::UserWritable
+                | PathCategory::Temp
+                | PathCategory::Downloads
+                | PathCategory::AppData
         );
 
         if is_system_name && known_user_path {
@@ -165,20 +231,37 @@ impl Rule for ProcessNameMasquerade {
 pub struct SuspiciousParentChildChain;
 
 impl Rule for SuspiciousParentChildChain {
-    fn key(&self) -> &str { "suspicious_parent_child_chain" }
-    fn weight(&self) -> u32 { 45 }
+    fn key(&self) -> &str {
+        "suspicious_parent_child_chain"
+    }
+    fn weight(&self) -> u32 {
+        45
+    }
 
-    fn check(&self, process: &ProcessRecord, parent: Option<&ProcessRecord>) -> Option<RuleMatchResult> {
+    fn check(
+        &self,
+        process: &ProcessRecord,
+        parent: Option<&ProcessRecord>,
+    ) -> Option<RuleMatchResult> {
         let child_is_shell = {
             let n = process.name.to_lowercase();
-            n.contains("powershell") || n == "cmd.exe" || n.contains("wscript") || n.contains("cscript")
+            n.contains("powershell")
+                || n == "cmd.exe"
+                || n.contains("wscript")
+                || n.contains("cscript")
         };
 
-        let parent_is_browser_or_doc = parent.map(|p| {
-            let n = p.name.to_lowercase();
-            n.contains("chrome") || n.contains("firefox") || n.contains("msedge") ||
-            n.contains("iexplore") || n.contains("acrobat") || n.contains("acrord")
-        }).unwrap_or(false);
+        let parent_is_browser_or_doc = parent
+            .map(|p| {
+                let n = p.name.to_lowercase();
+                n.contains("chrome")
+                    || n.contains("firefox")
+                    || n.contains("msedge")
+                    || n.contains("iexplore")
+                    || n.contains("acrobat")
+                    || n.contains("acrord")
+            })
+            .unwrap_or(false);
 
         if child_is_shell && parent_is_browser_or_doc {
             Some(make_result(
@@ -203,10 +286,18 @@ impl Rule for SuspiciousParentChildChain {
 pub struct PersistenceAddedRecently;
 
 impl Rule for PersistenceAddedRecently {
-    fn key(&self) -> &str { "persistence_added_recently" }
-    fn weight(&self) -> u32 { 50 }
+    fn key(&self) -> &str {
+        "persistence_added_recently"
+    }
+    fn weight(&self) -> u32 {
+        50
+    }
 
-    fn check(&self, _process: &ProcessRecord, _parent: Option<&ProcessRecord>) -> Option<RuleMatchResult> {
+    fn check(
+        &self,
+        _process: &ProcessRecord,
+        _parent: Option<&ProcessRecord>,
+    ) -> Option<RuleMatchResult> {
         // Triggered externally by service layer when startup linkage is detected
         None
     }
@@ -216,16 +307,27 @@ impl Rule for PersistenceAddedRecently {
 pub struct ExeInTempDir;
 
 impl Rule for ExeInTempDir {
-    fn key(&self) -> &str { "exe_in_temp_dir" }
-    fn weight(&self) -> u32 { 25 }
+    fn key(&self) -> &str {
+        "exe_in_temp_dir"
+    }
+    fn weight(&self) -> u32 {
+        25
+    }
 
-    fn check(&self, process: &ProcessRecord, _parent: Option<&ProcessRecord>) -> Option<RuleMatchResult> {
+    fn check(
+        &self,
+        process: &ProcessRecord,
+        _parent: Option<&ProcessRecord>,
+    ) -> Option<RuleMatchResult> {
         let in_temp = matches!(process.path_category, PathCategory::Temp);
         // Skip known-safe Microsoft temp extractors
         let name_lower = process.name.to_lowercase();
-        let is_known_temp_pattern = name_lower.contains("setup") || name_lower.contains("install")
-            || name_lower.contains("update") || name_lower.contains("bing")
-            || name_lower.contains("msedge") || name_lower.contains("windows");
+        let is_known_temp_pattern = name_lower.contains("setup")
+            || name_lower.contains("install")
+            || name_lower.contains("update")
+            || name_lower.contains("bing")
+            || name_lower.contains("msedge")
+            || name_lower.contains("windows");
         if in_temp && !is_known_temp_pattern {
             Some(make_result(
                 self.key(),
@@ -243,15 +345,24 @@ impl Rule for ExeInTempDir {
 pub struct HighRiskPathCategory;
 
 impl Rule for HighRiskPathCategory {
-    fn key(&self) -> &str { "high_risk_path_category" }
-    fn weight(&self) -> u32 { 20 }
+    fn key(&self) -> &str {
+        "high_risk_path_category"
+    }
+    fn weight(&self) -> u32 {
+        20
+    }
 
-    fn check(&self, process: &ProcessRecord, _parent: Option<&ProcessRecord>) -> Option<RuleMatchResult> {
+    fn check(
+        &self,
+        process: &ProcessRecord,
+        _parent: Option<&ProcessRecord>,
+    ) -> Option<RuleMatchResult> {
         let in_downloads = matches!(process.path_category, PathCategory::Downloads);
         if in_downloads {
             Some(make_result(
                 self.key(),
-                "Process running from Downloads folder — review if this was intentionally executed".to_string(),
+                "Process running from Downloads folder — review if this was intentionally executed"
+                    .to_string(),
                 json!({ "exe_path": process.exe_path }),
                 self.weight(),
             ))

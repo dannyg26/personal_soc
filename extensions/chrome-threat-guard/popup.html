@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Threat Guard Autofill</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <h1>Threat Guard</h1>
+      <p class="subtitle">Pair the browser extension with the desktop app.</p>
+
+      <div id="status" class="status">Checking desktop connection...</div>
+
+      <form id="pair-form" class="stack">
+        <label for="pair-code">Pair code</label>
+        <input id="pair-code" type="text" placeholder="TG-ABCDEFGH" autocomplete="off" />
+        <button type="submit">Connect to Threat Guard</button>
+      </form>
+
+      <button id="forget-button" class="ghost" type="button">Forget pairing</button>
+
+      <p id="message" class="message"></p>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

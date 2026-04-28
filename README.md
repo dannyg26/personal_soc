@@ -1,159 +1,181 @@
-# ThreatGuard — Personal Security Assistant
+# Threat Guard
 
-A Windows desktop security monitor that tracks running processes, startup persistence, and suspicious behaviour in real time, then explains findings through an AI-powered chat interface.
-
----
+Threat Guard is a Windows-first desktop security workspace built with Tauri, Rust, React, and TypeScript. It monitors running processes and startup persistence, records security events, explains activity through AI, scans suspicious links, and includes a local password manager with browser autofill.
 
 ## Project Structure
 
+```text
+personal_soc/
+|- apps/
+|  |- desktop-ui/                 React + TypeScript frontend (Vite)
+|  `- tauri-shell/
+|     `- src-tauri/               Tauri 2 shell and Rust commands
+|- crates/
+|  |- ai-explainer/               AI client and prompt/context helpers
+|  |- monitor-core/               Monitoring, scoring, rules, SQLite persistence
+|  `- shared-types/               Shared Rust models
+|- extensions/
+|  `- chrome-threat-guard/        Chrome and Edge password bridge extension
+|- package.json
+`- README.md
 ```
-personal-soc/
-├── apps/
-│   ├── desktop-ui/                  # React + TypeScript frontend (Vite)
-│   └── tauri-shell/                 # Tauri 2 desktop shell + Rust commands
-│       └── src-tauri/
-│           ├── .env.example         # Copy to .env and add your key
-│           └── build.rs             # Bakes GROQ_API_KEY into binary at compile time
-├── crates/
-│   ├── monitor-core/                # Process monitoring, rules engine, SQLite persistence
-│   ├── ai-explainer/                # Groq AI client + context builder
-│   └── shared-types/                # Shared Rust types (serde-serializable)
-└── README.md
-```
-
----
 
 ## Prerequisites
 
-| Tool | Version | Install |
-|------|---------|---------|
-| Rust (stable) | 1.77+ | https://rustup.rs |
-| Node.js | 18+ | https://nodejs.org |
-| npm | 9+ | Bundled with Node.js |
-| Tauri CLI v2 | latest | `cargo install tauri-cli --version "^2"` |
-| Windows | 10 / 11 | Required (primary target) |
+| Tool | Version |
+| ---- | ------- |
+| Windows | 10 or 11 |
+| Rust | 1.77+ |
+| Node.js | 18+ |
+| npm | 9+ |
+| Tauri CLI | v2 |
 
----
+Install the Tauri CLI with:
 
-## Getting Started
+```powershell
+cargo install tauri-cli --version "^2"
+```
+
+## Quick Start
 
 ### 1. Clone the repo
 
-```bash
+```powershell
 git clone <repo-url>
-cd personal-soc
+cd personal_soc
 ```
 
-### 2. Create your `.env` file
+### 2. Install dependencies
 
-The AI assistant requires a Groq API key. You will receive this key separately.
-
-```bash
-cd apps/tauri-shell/src-tauri
-cp .env.example .env
-```
-
-Open `.env` and replace `your_key_here` with the key you were given:
-
-```env
-GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-> **Important:** Never commit `.env` — it is already listed in `.gitignore`.
-
-### 3. Install frontend dependencies
-
-```bash
-# From the repo root
+```powershell
+npm install
 npm --prefix apps/desktop-ui install
 ```
 
-### 4. Run in development mode
+### 3. Optional: configure API keys
 
-```bash
-# From the repo root
+Threat Guard can run without build-time keys, but AI features and VirusTotal-backed link scanning need keys configured either at build time or later in Settings.
+
+```powershell
+Copy-Item apps/tauri-shell/src-tauri/.env.example apps/tauri-shell/src-tauri/.env
+```
+
+Example:
+
+```env
+GROQ_API_KEY=your_groq_key_here
+VIRUSTOTAL_API_KEY=your_virustotal_key_here
+```
+
+Notes:
+- `apps/tauri-shell/src-tauri/.env` is gitignored.
+- `build.rs` reads that file and bakes those keys into the local desktop build.
+- You can also add or override the Groq and VirusTotal keys later from the Settings page.
+
+### 4. Run the app in development
+
+```powershell
 cargo tauri dev
 ```
 
-This starts the Vite dev server and the Tauri desktop window together. The app will hot-reload on frontend changes. Rust changes require a restart.
+The frontend dev server runs at `http://localhost:43125`.
 
-If another app is already using common frontend dev ports, this project now expects `http://localhost:43125` during development.
+## Useful Commands
 
----
+From the repo root:
+
+```powershell
+npm run typecheck
+npm run build
+cargo check -p threat-guard
+```
 
 ## Current Features
 
-| Page | Description |
-|------|-------------|
-| Dashboard | Health score, alert counts, CPU/memory graphs, recent alerts |
-| Processes | Live paginated process table — risk scores, signer status, path category, sort/filter |
-| Process Detail | CPU/memory/network charts, metadata, AI Q&A panel, kill/trust actions |
-| Alerts | Security alerts with severity triage and status management |
-| Startup | Registry Run keys and startup folder monitoring, remove entries |
-| Events | Unified security timeline — process starts/stops, alerts, startup changes, user actions |
-| AI Assistant | General PC security chatbot — ask anything about your system |
-| Settings | Groq API key override, data retention cleanup |
+### Core Monitoring
 
----
+- Dashboard with health score, suspicious-process counts, startup-change counts, and recent alerts
+- Live process inventory with risk scoring, signing/path context, and process detail pages
+- Startup entry review and removal workflows
+- Unified events timeline for process activity, alerts, startup changes, and user actions
+- Alerts page with severity triage, status actions, and password-health alerts
 
-## Unfinished Pages (assigned features)
+### AI Assistant
 
-These pages are wired up and appear in the sidebar but are empty. Each is a separate feature for a team member to implement.
+- Floating Threat Guard assistant available across the app instead of a dedicated assistant tab
+- Page-aware prompt suggestions based on the current screen
+- Password-health assistant warnings when weak or reused passwords are found
 
-### Phishing Detector
-- **File:** `apps/desktop-ui/src/pages/PhishingDetectorPage.tsx`
-- **Route:** `/phishing-detector`
+### Security Tools
 
-
-### Malicious Link Detector
-- **File:** `apps/desktop-ui/src/pages/MaliciousLinkDetectorPage.tsx`
-- **Route:** `/malicious-link-detector`
--
+- Phishing detector page for reviewing suspicious message content
+- Malicious link detector for URLs, domains, and IP addresses
+- VirusTotal-backed reputation lookups when a VirusTotal API key is configured
+- Local heuristic fallback when VirusTotal is unavailable
+- Recent scan history with clear-history control
 
 ### Password Manager
-- **File:** `apps/desktop-ui/src/pages/PasswordManagerPage.tsx`
-- **Route:** `/password-manager`
 
-To add backend logic for your feature, follow the pattern used by other pages, I recommend using a ai editor like codex or claude for assitance with this project:
+- Local encrypted credential vault stored on the device
+- 6-digit Threat Guard passcode for vault access
+- Add, edit, reveal, copy, delete, lock, and unlock saved credentials
+- Password strength checker with Have I Been Pwned range lookups
+- Weak-password, reused-password, and compromised-password review signals
+- Alerts-tab warning when saved passwords appear in known breaches
 
-1. Add a Tauri command in `apps/tauri-shell/src-tauri/src/commands.rs`
-2. Register it in `apps/tauri-shell/src-tauri/src/lib.rs` inside `tauri::generate_handler!`
-3. Add the TypeScript wrapper in `apps/desktop-ui/src/lib/invoke.ts`
-4. Build your UI in the page file
+### Browser Autofill Bridge
 
----
+- Included Chrome and Edge extension in `extensions/chrome-threat-guard`
+- Save login prompts from supported password forms
+- Autofill after Threat Guard passcode confirmation
+- Pairing code flow between the desktop app and browser extension
+
+## Browser Extension Setup
+
+1. Open `chrome://extensions` or `edge://extensions`
+2. Turn on Developer mode
+3. Click Load unpacked
+4. Select `extensions/chrome-threat-guard`
+5. Open Threat Guard and go to Password Manager
+6. Copy the pair code from the Browser Autofill Bridge card
+7. Open the extension popup, paste the code, and connect
+
+The extension stores only its pairing token in browser storage. Saved credentials stay in the Threat Guard desktop vault.
+
+## Data and Security Notes
+
+- Threat Guard stores app data in the Tauri app-data directory, not inside the repo.
+- The main local database is `psa.db` in the app-data folder.
+- Saved credential payloads are protected with Windows DPAPI.
+- The Threat Guard vault passcode is stored as a salted hash, not plaintext.
+- Browser autofill requires a Threat Guard passcode confirmation before credentials are returned.
+- If you upload built binaries created from a local `.env`, the compiled app may contain baked API keys.
 
 ## Detection Rules
 
 | Rule | Weight | Description |
-|------|--------|-------------|
-| `unsigned_in_user_writable_dir` | 40 | Unsigned exe from AppData/Temp/Downloads |
-| `powershell_spawned_by_office` | 60 | PowerShell child of Office app |
-| `cmd_spawned_by_script_host` | 55 | cmd.exe child of wscript/cscript/mshta |
-| `process_name_masquerade` | 70 | System binary name from non-system path |
-| `suspicious_parent_child_chain` | 45 | Shell spawned by browser/document viewer |
-| `exe_in_temp_dir` | 25 | Any executable running from %TEMP% |
-| `high_risk_path_category` | 20 | Executable in Downloads folder |
+| ---- | ------ | ----------- |
+| `unsigned_in_user_writable_dir` | 40 | Unsigned executable from AppData, Temp, or Downloads |
+| `powershell_spawned_by_office` | 60 | PowerShell launched by an Office process |
+| `cmd_spawned_by_script_host` | 55 | `cmd.exe` launched by `wscript`, `cscript`, or `mshta` |
+| `process_name_masquerade` | 70 | System-looking binary name running from a non-system path |
+| `suspicious_parent_child_chain` | 45 | Suspicious shell or execution chain |
+| `exe_in_temp_dir` | 25 | Executable running from `%TEMP%` |
+| `high_risk_path_category` | 20 | Executable in a higher-risk user path |
 
-Risk score ≥ 40 → flagged as "At Risk". Risk score ≥ 70 → high severity alert.
-
----
+Risk score `>= 40` is treated as at-risk. Risk score `>= 70` is treated as high severity.
 
 ## Architecture Notes
 
-- **No server required** — everything runs locally. The database is a SQLite file stored in the Tauri app data directory.
-- **AI key baked in at build time** — `build.rs` reads `GROQ_API_KEY` from `.env` and compiles it into the binary via `option_env!`. Users of the built installer never need to configure anything. The key can also be overridden at runtime in the Settings page.
-- **Polling intervals** — overview/alerts/startup refresh every 15 s; process list refreshes every 30 s. The Events page also refreshes every 30 s.
-- **Tauri v2 param convention** — invoke parameters are written in camelCase in TypeScript and automatically converted to snake_case by Tauri before reaching Rust handlers.
+- Everything runs locally. There is no required backend server.
+- The desktop shell is Tauri 2, the frontend is Vite + React, and the backend command layer is Rust.
+- TypeScript invoke parameters use camelCase and map to Rust snake_case handlers through Tauri.
+- The layout refreshes core overview, alert, and startup data every 15 seconds and process summaries every 30 seconds.
 
----
+## Current Limitations
 
-## Known Limitations
-
-- Heuristic scoring is not malware detection — it surfaces suspicious patterns for human review
-- No kernel-level telemetry (ETW, Sysmon) in this version
-- CPU % requires two samples over time; newly seen processes show 0%
-- Some process metadata (command line, user) may be unavailable without running as Administrator
-- Events timeline covers the last 30 days only
-
----
+- Windows is the primary supported platform.
+- The password vault currently depends on Windows DPAPI protection.
+- The included browser extension targets Chromium browsers only.
+- The extension currently autofills the first matching account for a site rather than showing an account picker.
+- Heuristic process scoring is not a substitute for full malware analysis.

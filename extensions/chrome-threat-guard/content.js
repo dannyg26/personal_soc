@@ -119,9 +119,9 @@ function requestVaultPasscode(errorMessage = "") {
   removeAutofillPrompt();
 
   return new Promise((resolve) => {
-    if (!document.body) {
-      const fallback = window.prompt(autofillPasscodeMessage(), "");
-      resolve(fallback?.trim() || null);
+    const promptHost = document.body || document.documentElement;
+    if (!promptHost) {
+      resolve(null);
       return;
     }
 
@@ -156,18 +156,50 @@ function requestVaultPasscode(errorMessage = "") {
     title.style.fontSize = "14px";
     title.style.lineHeight = "1.5";
 
+    const inputWrap = document.createElement("div");
+    inputWrap.style.position = "relative";
+
     const input = document.createElement("input");
     input.type = "password";
     input.inputMode = "numeric";
     input.maxLength = 6;
     input.placeholder = "6-digit passcode";
     input.style.width = "100%";
-    input.style.padding = "10px 12px";
+    input.style.padding = "10px 48px 10px 12px";
     input.style.borderRadius = "10px";
     input.style.border = "1px solid rgba(148,163,184,0.3)";
     input.style.background = "rgba(15,23,42,0.55)";
     input.style.color = "#f8fafc";
     input.style.outline = "none";
+
+    const visibilityButton = document.createElement("button");
+    visibilityButton.type = "button";
+    visibilityButton.textContent = "Show";
+    visibilityButton.style.position = "absolute";
+    visibilityButton.style.right = "12px";
+    visibilityButton.style.top = "50%";
+    visibilityButton.style.transform = "translateY(-50%)";
+    visibilityButton.style.border = "none";
+    visibilityButton.style.background = "transparent";
+    visibilityButton.style.color = "#93c5fd";
+    visibilityButton.style.fontSize = "12px";
+    visibilityButton.style.fontWeight = "700";
+    visibilityButton.style.cursor = "pointer";
+    visibilityButton.style.padding = "0";
+
+    let passcodeVisible = false;
+    const updatePasscodeVisibility = () => {
+      input.type = passcodeVisible ? "text" : "password";
+      visibilityButton.textContent = passcodeVisible ? "Hide" : "Show";
+    };
+
+    visibilityButton.addEventListener("click", () => {
+      passcodeVisible = !passcodeVisible;
+      updatePasscodeVisibility();
+      input.focus();
+    });
+    updatePasscodeVisibility();
+    inputWrap.append(input, visibilityButton);
 
     const error = document.createElement("div");
     error.textContent = errorMessage || "Threat Guard will only fill after you confirm.";
@@ -232,8 +264,8 @@ function requestVaultPasscode(errorMessage = "") {
     });
 
     actions.append(cancelButton, confirmButton);
-    overlay.append(badge, title, input, error, actions);
-    document.body.appendChild(overlay);
+    overlay.append(badge, title, inputWrap, error, actions);
+    promptHost.appendChild(overlay);
     input.focus();
   });
 }

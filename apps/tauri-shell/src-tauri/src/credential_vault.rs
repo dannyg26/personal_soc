@@ -11,7 +11,7 @@ use url::Url;
 use uuid::Uuid;
 
 pub const BROWSER_BRIDGE_PORT: u16 = 38913;
-pub const VAULT_UNLOCK_WINDOW_SECONDS: u64 = 120;
+pub const VAULT_UNLOCK_WINDOW_SECONDS: u64 = 300;
 pub const VAULT_UNLOCK_REQUIRED_MESSAGE: &str =
     "Enter your 6-digit Threat Guard passcode to unlock saved credentials.";
 pub const VAULT_MANAGE_REQUIRED_MESSAGE: &str =

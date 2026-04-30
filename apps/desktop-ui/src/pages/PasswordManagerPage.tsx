@@ -52,6 +52,7 @@ const STRENGTH_META: Record<
 };
 
 const PASSWORD_MANAGER_SIGNAL_PATH = "/password-manager";
+const DEFAULT_VAULT_UNLOCK_WINDOW_SECONDS = 300;
 
 function formatRiskIssue(count: number, descriptor: string) {
   return `${count} saved password${count === 1 ? "" : "s"} ${
@@ -134,6 +135,9 @@ export default function PasswordManagerPage() {
   const [setupPasscode, setSetupPasscode] = useState("");
   const [confirmPasscode, setConfirmPasscode] = useState("");
   const [unlockPasscode, setUnlockPasscode] = useState("");
+  const [showSetupPasscode, setShowSetupPasscode] = useState(false);
+  const [showConfirmPasscode, setShowConfirmPasscode] = useState(false);
+  const [showUnlockPasscode, setShowUnlockPasscode] = useState(false);
   const [savingPasscode, setSavingPasscode] = useState(false);
   const [unlockingVault, setUnlockingVault] = useState(false);
   const [lockingVault, setLockingVault] = useState(false);
@@ -169,13 +173,13 @@ export default function PasswordManagerPage() {
     const interval = window.setInterval(() => {
       void refreshBridge();
       void refreshVaultRiskSummary();
-      if (vaultStatus?.unlocked) {
-        void refreshVault(false);
+      if (vaultStatus?.configured) {
+        void refreshVaultStatus(Boolean(vaultStatus.unlocked));
       }
     }, 5000);
 
     return () => window.clearInterval(interval);
-  }, [vaultStatus?.unlocked]);
+  }, [vaultStatus?.configured, vaultStatus?.unlocked]);
 
   const resetAddCredentialForm = () => {
     setSite("");
@@ -188,6 +192,12 @@ export default function PasswordManagerPage() {
     setEditSite("");
     setEditUsername("");
     setEditPassword("");
+  };
+
+  const resetPasscodeVisibility = () => {
+    setShowSetupPasscode(false);
+    setShowConfirmPasscode(false);
+    setShowUnlockPasscode(false);
   };
 
   const clearCachedCredentialSecret = (credentialId: string) => {
@@ -205,6 +215,7 @@ export default function PasswordManagerPage() {
     setPasswordSecrets({});
     resetAddCredentialForm();
     resetEditForm();
+    resetPasscodeVisibility();
   };
 
   const isVaultProtectionError = (message: string) => {
@@ -219,14 +230,16 @@ export default function PasswordManagerPage() {
     await Promise.all([refreshBridge(), refreshVaultStatus(), refreshVaultRiskSummary()]);
   };
 
-  const refreshVaultStatus = async () => {
+  const refreshVaultStatus = async (syncVault = true) => {
     try {
       setVaultError(null);
       const status = await getPasswordVaultStatus();
       setVaultStatus(status);
 
       if (status.unlocked) {
-        await refreshVault(false);
+        if (syncVault) {
+          await refreshVault(false, false);
+        }
         return;
       }
 
@@ -242,7 +255,7 @@ export default function PasswordManagerPage() {
     }
   };
 
-  const refreshVault = async (showSpinner = false) => {
+  const refreshVault = async (showSpinner = false, refreshStatusOnProtectionError = true) => {
     try {
       if (showSpinner) {
         setVaultLoading(true);
@@ -255,7 +268,13 @@ export default function PasswordManagerPage() {
         error instanceof Error ? error.message : "Failed to load the saved credential vault.";
 
       if (isVaultProtectionError(message)) {
-        void refreshVaultStatus();
+        if (refreshStatusOnProtectionError) {
+          void refreshVaultStatus(false);
+        } else {
+          setVaultStatus((previous) =>
+            previous ? { ...previous, unlocked: false } : previous,
+          );
+        }
         clearUnlockedVaultState();
         setVaultError(null);
       } else {
@@ -398,6 +417,7 @@ export default function PasswordManagerPage() {
       const status = await unlockPasswordVault(unlockPasscode.trim());
       setVaultStatus(status);
       setUnlockPasscode("");
+      setShowUnlockPasscode(false);
       await refreshVault(true);
       await refreshVaultRiskSummary();
     } catch (error) {
@@ -431,6 +451,8 @@ export default function PasswordManagerPage() {
       setVaultStatus(status);
       setSetupPasscode("");
       setConfirmPasscode("");
+      setShowSetupPasscode(false);
+      setShowConfirmPasscode(false);
       await refreshVault(true);
       await refreshVaultRiskSummary();
     } catch (error) {
@@ -507,7 +529,11 @@ export default function PasswordManagerPage() {
       setVaultStatus((previous) =>
         previous
           ? { ...previous, unlocked: true }
-          : { configured: true, unlocked: true, unlock_window_seconds: 120 },
+          : {
+              configured: true,
+              unlocked: true,
+              unlock_window_seconds: DEFAULT_VAULT_UNLOCK_WINDOW_SECONDS,
+            },
       );
       setPasswordSecrets((previous) => ({ ...previous, [credentialId]: secret.password }));
       setVisiblePasswords((previous) => [...previous, credentialId]);
@@ -535,7 +561,11 @@ export default function PasswordManagerPage() {
       setVaultStatus((previous) =>
         previous
           ? { ...previous, unlocked: true }
-          : { configured: true, unlocked: true, unlock_window_seconds: 120 },
+          : {
+              configured: true,
+              unlocked: true,
+              unlock_window_seconds: DEFAULT_VAULT_UNLOCK_WINDOW_SECONDS,
+            },
       );
       await copyToClipboard(value);
     } catch (error) {
@@ -580,7 +610,9 @@ export default function PasswordManagerPage() {
   const vaultUnlocked = Boolean(vaultStatus?.unlocked);
   const unlockWindowMinutes = Math.max(
     1,
-    Math.round((vaultStatus?.unlock_window_seconds ?? 120) / 60),
+    Math.round(
+      (vaultStatus?.unlock_window_seconds ?? DEFAULT_VAULT_UNLOCK_WINDOW_SECONDS) / 60,
+    ),
   );
   const passwordHealthLabel = vaultRiskSummary
     ? vaultRiskSummary.has_alerts
@@ -903,23 +935,51 @@ export default function PasswordManagerPage() {
                   here and to approve every browser autofill request.
                 </p>
                 <div style={styles.passcodeForm}>
-                  <input
-                    value={setupPasscode}
-                    onChange={(event) => setSetupPasscode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="Create 6-digit passcode"
-                    className="input"
-                    inputMode="numeric"
-                    maxLength={6}
-                  />
-                  <input
-                    value={confirmPasscode}
-                    onChange={(event) => setConfirmPasscode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                    onKeyDown={(event) => event.key === "Enter" && void handleCreatePasscode()}
-                    placeholder="Confirm passcode"
-                    className="input"
-                    inputMode="numeric"
-                    maxLength={6}
-                  />
+                  <div style={styles.passcodeFieldWrap}>
+                    <input
+                      value={setupPasscode}
+                      onChange={(event) =>
+                        setSetupPasscode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      placeholder="Create 6-digit passcode"
+                      className="input"
+                      inputMode="numeric"
+                      maxLength={6}
+                      type={showSetupPasscode ? "text" : "password"}
+                      style={styles.passcodeInput}
+                    />
+                    <button
+                      type="button"
+                      style={styles.passcodeEyeBtn}
+                      onClick={() => setShowSetupPasscode((current) => !current)}
+                      title={showSetupPasscode ? "Hide passcode" : "Show passcode"}
+                    >
+                      {showSetupPasscode ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <div style={styles.passcodeFieldWrap}>
+                    <input
+                      value={confirmPasscode}
+                      onChange={(event) =>
+                        setConfirmPasscode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      onKeyDown={(event) => event.key === "Enter" && void handleCreatePasscode()}
+                      placeholder="Confirm passcode"
+                      className="input"
+                      inputMode="numeric"
+                      maxLength={6}
+                      type={showConfirmPasscode ? "text" : "password"}
+                      style={styles.passcodeInput}
+                    />
+                    <button
+                      type="button"
+                      style={styles.passcodeEyeBtn}
+                      onClick={() => setShowConfirmPasscode((current) => !current)}
+                      title={showConfirmPasscode ? "Hide passcode" : "Show passcode"}
+                    >
+                      {showConfirmPasscode ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
                   <button
                     className="btn btn-primary"
                     onClick={() => void handleCreatePasscode()}
@@ -944,15 +1004,29 @@ export default function PasswordManagerPage() {
                   smooth.
                 </p>
                 <div style={styles.passcodeForm}>
-                  <input
-                    value={unlockPasscode}
-                    onChange={(event) => setUnlockPasscode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                    onKeyDown={(event) => event.key === "Enter" && void handleUnlockVault()}
-                    placeholder="Enter 6-digit passcode"
-                    className="input"
-                    inputMode="numeric"
-                    maxLength={6}
-                  />
+                  <div style={styles.passcodeFieldWrap}>
+                    <input
+                      value={unlockPasscode}
+                      onChange={(event) =>
+                        setUnlockPasscode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      onKeyDown={(event) => event.key === "Enter" && void handleUnlockVault()}
+                      placeholder="Enter 6-digit passcode"
+                      className="input"
+                      inputMode="numeric"
+                      maxLength={6}
+                      type={showUnlockPasscode ? "text" : "password"}
+                      style={styles.passcodeInput}
+                    />
+                    <button
+                      type="button"
+                      style={styles.passcodeEyeBtn}
+                      onClick={() => setShowUnlockPasscode((current) => !current)}
+                      title={showUnlockPasscode ? "Hide passcode" : "Show passcode"}
+                    >
+                      {showUnlockPasscode ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
                   <button
                     className="btn btn-primary"
                     onClick={() => void handleUnlockVault()}
@@ -1391,6 +1465,27 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
     marginTop: 8,
     maxWidth: 280,
+  },
+  passcodeFieldWrap: {
+    position: "relative",
+  },
+  passcodeInput: {
+    width: "100%",
+    paddingRight: 38,
+  },
+  passcodeEyeBtn: {
+    position: "absolute",
+    right: 10,
+    top: "50%",
+    transform: "translateY(-50%)",
+    border: "none",
+    background: "transparent",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    padding: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   lockedTitle: {
     margin: 0,

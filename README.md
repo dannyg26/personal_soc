@@ -2,6 +2,27 @@
 
 Threat Guard is a Windows-first desktop security workspace built with Tauri, Rust, React, and TypeScript. It monitors running processes and startup persistence, records security events, explains activity through AI, scans suspicious links, and includes a local password manager with browser autofill.
 
+## Download and Install
+
+Threat Guard is packaged as a Windows desktop app.
+
+### Recommended download
+
+Download the latest Windows installer from GitHub Releases:
+
+- [Download Threat Guard for Windows](https://github.com/dannyg26/personal_soc/releases/latest/download/Threat-Guard_0.1.0_x64-setup.exe)
+- Alternative MSI installer: [Threat-Guard_0.1.0_x64_en-US.msi](https://github.com/dannyg26/personal_soc/releases/latest/download/Threat-Guard_0.1.0_x64_en-US.msi)
+
+### Install steps
+
+1. Download `Threat-Guard_0.1.0_x64-setup.exe`.
+2. Open the downloaded installer.
+3. If Windows SmartScreen appears, choose More info, then Run anyway.
+4. Follow the installer prompts.
+5. Launch Threat Guard from the Start menu or desktop shortcut.
+
+Threat Guard stores its data locally on your device. AI explanations and VirusTotal link reputation checks are optional and can be configured later from Settings.
+
 ## Project Structure
 
 ```text
@@ -88,6 +109,19 @@ From the repo root:
 npm run typecheck
 npm run build
 cargo check -p threat-guard
+```
+
+Create downloadable Windows installers:
+
+```powershell
+cargo tauri build
+```
+
+The generated installers are written to:
+
+```text
+target\release\bundle\nsis\Threat-Guard_0.1.0_x64-setup.exe
+target\release\bundle\msi\Threat-Guard_0.1.0_x64_en-US.msi
 ```
 
 ## Current Features

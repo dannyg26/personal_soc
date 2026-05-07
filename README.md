@@ -8,10 +8,10 @@ Threat Guard is packaged as a Windows desktop app.
 
 ### Recommended download
 
-Download the latest Windows installer from GitHub Releases:
+Download the latest Windows installer from this repository:
 
-- [Download Threat Guard for Windows](https://github.com/dannyg26/personal_soc/releases/latest/download/Threat-Guard_0.1.0_x64-setup.exe)
-- Alternative MSI installer: [Threat-Guard_0.1.0_x64_en-US.msi](https://github.com/dannyg26/personal_soc/releases/latest/download/Threat-Guard_0.1.0_x64_en-US.msi)
+- [Download Threat Guard for Windows](downloads/Threat-Guard_0.1.0_x64-setup.exe)
+- Alternative MSI installer: [Threat-Guard_0.1.0_x64_en-US.msi](downloads/Threat-Guard_0.1.0_x64_en-US.msi)
 
 ### Install steps
 
